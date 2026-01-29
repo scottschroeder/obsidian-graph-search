@@ -4,7 +4,7 @@ use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
 use crate::graph::model::{EdgeInput, NodeInput};
-use crate::graph::store::{DistanceEntry, GraphStore, ScoredCandidate};
+use crate::graph::store::{DistanceEntry, GraphStore, ScoreWeights, ScoredCandidate};
 use crate::models::CandidateInput;
 use crate::query;
 use crate::search::{SearchDocumentInput, SearchStore};
@@ -52,11 +52,16 @@ pub fn parse_query_layout(raw: String) -> Result<JsValue, JsValue> {
 pub fn graph_rank_candidates(
     near_titles: JsValue,
     candidates: JsValue,
+    weights: JsValue,
 ) -> Result<JsValue, JsValue> {
     let near_titles: Vec<String> = swb::from_value(near_titles)?;
     let candidates: Vec<CandidateInput> = swb::from_value(candidates)?;
-    let ranked: Vec<ScoredCandidate> =
-        GRAPH.with(|store| store.borrow().rank_candidates(near_titles, candidates));
+    let weights: ScoreWeights = swb::from_value(weights)?;
+    let ranked: Vec<ScoredCandidate> = GRAPH.with(|store| {
+        store
+            .borrow()
+            .rank_candidates(near_titles, candidates, weights)
+    });
     swb::to_value(&ranked).map_err(|err| err.into())
 }
 

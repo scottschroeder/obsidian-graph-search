@@ -55,11 +55,27 @@ describe("wasm integration", () => {
 			[{ from: "alpha.md", to: "beta.md" }],
 		);
 		expect(graphStats.node_count).toBe(2);
-		const ranked = wasm.graph_rank_candidates(["alpha"], [
-			{ title: "alpha", path: "alpha.md" },
-			{ title: "beta", path: "beta.md" },
-		]);
-		expect(ranked[0].path).toBe("alpha.md");
-		expect(ranked[1].path).toBe("beta.md");
+		const ranked = wasm.graph_rank_candidates(
+			["alpha"],
+			[
+				{ title: "alpha", path: "alpha.md", title_score: 0, body_score: 0 },
+				{ title: "beta", path: "beta.md", title_score: 0, body_score: 0 },
+			],
+			{
+				distance_weight: 1,
+				title_weight: 1,
+				body_weight: 1,
+				distance_falloff: 0.5,
+			},
+		);
+		expect(ranked.length).toBe(2);
+		const distances = new Map(
+			ranked.map((entry: { path: string; distance_sum: number }) => [
+				entry.path,
+				entry.distance_sum,
+			]),
+		);
+		expect(distances.get("alpha.md")).toBe(0);
+		expect(distances.get("beta.md")).toBe(1);
 	});
 });

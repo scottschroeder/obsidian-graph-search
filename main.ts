@@ -27,7 +27,10 @@ import type {
 // Remember to rename these classes and interfaces!
 
 interface GraphSearchPluginSettings {
-	mySetting: string;
+	scoreWeightDistance: number;
+	scoreWeightTitle: number;
+	scoreWeightBody: number;
+	scoreDistanceFalloff: number;
 }
 
 type GraphNodeInput = {
@@ -41,7 +44,10 @@ type GraphEdgeInput = {
 };
 
 const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
-	mySetting: "default",
+	scoreWeightDistance: 1.0,
+	scoreWeightTitle: 1.0,
+	scoreWeightBody: 1.0,
+	scoreDistanceFalloff: 0.5,
 };
 
 export default class GraphSearchPlugin extends Plugin {
@@ -197,6 +203,15 @@ export default class GraphSearchPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	getScoreWeights() {
+		return {
+			distance_weight: this.settings.scoreWeightDistance,
+			title_weight: this.settings.scoreWeightTitle,
+			body_weight: this.settings.scoreWeightBody,
+			distance_falloff: this.settings.scoreDistanceFalloff,
+		};
+	}
+
 	async buildGraphIndex(): Promise<GraphStats> {
 		const files = this.app.vault.getMarkdownFiles();
 		const nodes: GraphNodeInput[] = files.map((file) => ({
@@ -271,6 +286,8 @@ export default class GraphSearchPlugin extends Plugin {
 		return candidates.map((file) => ({
 			title: file.basename,
 			path: file.path,
+			title_score: 0,
+			body_score: 0,
 		}));
 	}
 }
@@ -343,19 +360,70 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Settings for my awesome plugin." });
+		containerEl.createEl("h2", { text: "Graph Search Settings" });
+		containerEl.createEl("h3", { text: "Advanced Scoring" });
 
 		new Setting(containerEl)
-			.setName("Setting #1")
-			.setDesc("It's a secret")
+			.setName("Distance weight")
+			.setDesc("How much graph distance contributes to score")
 			.addText((text) =>
 				text
-					.setPlaceholder("Enter your secret")
-					.setValue(this.plugin.settings.mySetting)
+					.setPlaceholder("1.0")
+					.setValue(String(this.plugin.settings.scoreWeightDistance))
 					.onChange(async (value) => {
-						console.log("Secret: " + value);
-						this.plugin.settings.mySetting = value;
-						await this.plugin.saveSettings();
+						const parsed = Number.parseFloat(value);
+						if (!Number.isNaN(parsed)) {
+							this.plugin.settings.scoreWeightDistance = parsed;
+							await this.plugin.saveSettings();
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Title match weight")
+			.setDesc("How much title matches contribute to score")
+			.addText((text) =>
+				text
+					.setPlaceholder("1.0")
+					.setValue(String(this.plugin.settings.scoreWeightTitle))
+					.onChange(async (value) => {
+						const parsed = Number.parseFloat(value);
+						if (!Number.isNaN(parsed)) {
+							this.plugin.settings.scoreWeightTitle = parsed;
+							await this.plugin.saveSettings();
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Body match weight")
+			.setDesc("How much body matches contribute to score")
+			.addText((text) =>
+				text
+					.setPlaceholder("1.0")
+					.setValue(String(this.plugin.settings.scoreWeightBody))
+					.onChange(async (value) => {
+						const parsed = Number.parseFloat(value);
+						if (!Number.isNaN(parsed)) {
+							this.plugin.settings.scoreWeightBody = parsed;
+							await this.plugin.saveSettings();
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Distance falloff")
+			.setDesc("Controls how quickly distance score drops after 1-hop")
+			.addText((text) =>
+				text
+					.setPlaceholder("0.5")
+					.setValue(String(this.plugin.settings.scoreDistanceFalloff))
+					.onChange(async (value) => {
+						const parsed = Number.parseFloat(value);
+						if (!Number.isNaN(parsed)) {
+							this.plugin.settings.scoreDistanceFalloff = parsed;
+							await this.plugin.saveSettings();
+						}
 					}),
 			);
 	}

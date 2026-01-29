@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 
 use super::algo::bfs_multi_source;
@@ -28,6 +28,18 @@ pub struct ScoredCandidate {
     pub title: String,
     pub path: String,
     pub distance_sum: usize,
+    pub distance_score: f32,
+    pub title_score: f32,
+    pub body_score: f32,
+    pub total_score: f32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ScoreWeights {
+    pub distance_weight: f32,
+    pub title_weight: f32,
+    pub body_weight: f32,
+    pub distance_falloff: f32,
 }
 
 #[derive(Debug, Serialize)]
@@ -142,16 +154,31 @@ impl GraphStore {
         &self,
         near_titles: Vec<String>,
         candidates: Vec<CandidateInput>,
+        weights: ScoreWeights,
     ) -> Vec<ScoredCandidate> {
         if near_titles.is_empty() {
-            return candidates
+            let mut results: Vec<ScoredCandidate> = candidates
                 .into_iter()
-                .map(|candidate| ScoredCandidate {
-                    title: candidate.title,
-                    path: candidate.path,
-                    distance_sum: 0,
+                .map(|candidate| {
+                    let total_score = weights.title_weight * candidate.title_score
+                        + weights.body_weight * candidate.body_score;
+                    ScoredCandidate {
+                        title: candidate.title,
+                        path: candidate.path,
+                        distance_sum: 0,
+                        distance_score: 0.0,
+                        title_score: candidate.title_score,
+                        body_score: candidate.body_score,
+                        total_score,
+                    }
                 })
                 .collect();
+            results.sort_by(|a, b| {
+                b.total_score
+                    .partial_cmp(&a.total_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            return results;
         }
 
         let mut sources = Vec::new();
@@ -174,7 +201,7 @@ impl GraphStore {
                 continue;
             };
 
-            let mut total = 0;
+            let mut total = 0usize;
             let mut missing = false;
             for map in &distance_maps {
                 if let Some(distance) = map.get(&node) {
@@ -186,15 +213,29 @@ impl GraphStore {
             }
 
             if !missing {
+                let effective_distance = if total <= 1 { 0 } else { total - 1 };
+                let distance_score =
+                    1.0 / (1.0 + weights.distance_falloff * effective_distance as f32);
+                let total_score = weights.distance_weight * distance_score
+                    + weights.title_weight * candidate.title_score
+                    + weights.body_weight * candidate.body_score;
                 results.push(ScoredCandidate {
                     title: candidate.title,
                     path: candidate.path,
                     distance_sum: total,
+                    distance_score,
+                    title_score: candidate.title_score,
+                    body_score: candidate.body_score,
+                    total_score,
                 });
             }
         }
 
-        results.sort_by_key(|entry| entry.distance_sum);
+        results.sort_by(|a, b| {
+            b.total_score
+                .partial_cmp(&a.total_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results
     }
 

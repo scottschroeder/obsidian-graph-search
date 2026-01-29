@@ -26,6 +26,8 @@ struct SearchDocument {
     title: String,
     path: String,
     tokens: HashSet<String>,
+    title_tokens: HashSet<String>,
+    body_tokens: HashSet<String>,
     tags: HashSet<String>,
 }
 
@@ -55,13 +57,17 @@ impl SearchStore {
 
         for (doc_id, doc) in docs.into_iter().enumerate() {
             let mut tokens = HashSet::new();
+            let mut title_tokens = HashSet::new();
+            let mut body_tokens = HashSet::new();
             let mut tags = HashSet::new();
 
             for token in tokenize(&doc.title) {
-                tokens.insert(token);
+                tokens.insert(token.clone());
+                title_tokens.insert(token);
             }
             for token in tokenize(&doc.body) {
-                tokens.insert(token);
+                tokens.insert(token.clone());
+                body_tokens.insert(token);
             }
 
             if let Some(input_tags) = doc.tags {
@@ -76,6 +82,8 @@ impl SearchStore {
                 title: doc.title,
                 path: doc.path,
                 tokens,
+                title_tokens,
+                body_tokens,
                 tags,
             };
             self.docs.push(document);
@@ -110,11 +118,14 @@ impl SearchStore {
                 .map(|doc| CandidateInput {
                     title: doc.title.clone(),
                     path: doc.path.clone(),
+                    title_score: 0.0,
+                    body_score: 0.0,
                 })
                 .collect();
         }
 
         let mut candidate_ids: Option<HashSet<usize>> = None;
+        let mut score_terms: HashSet<String> = HashSet::new();
 
         for term in terms {
             let cleaned = term.trim_matches('"');
@@ -127,6 +138,7 @@ impl SearchStore {
             } else if let Some(path_term) = parse_path_term(&term_lower) {
                 self.filter_by_path(&path_term, candidate_ids.take())
             } else {
+                score_terms.insert(term_lower.clone());
                 self.filter_by_token(&term_lower, candidate_ids.take())
             };
 
@@ -140,14 +152,41 @@ impl SearchStore {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|id| self.docs.get(id))
-            .map(|doc| CandidateInput {
-                title: doc.title.clone(),
-                path: doc.path.clone(),
+            .map(|doc| {
+                let mut title_score = 0.0;
+                let mut body_score = 0.0;
+                for term in &score_terms {
+                    if Self::matches_tokens(&doc.title_tokens, term) {
+                        title_score += 1.0;
+                    }
+                    if Self::matches_tokens(&doc.body_tokens, term) {
+                        body_score += 1.0;
+                    }
+                }
+                CandidateInput {
+                    title: doc.title.clone(),
+                    path: doc.path.clone(),
+                    title_score,
+                    body_score,
+                }
             })
             .collect();
 
         results.sort_by(|a, b| a.title.cmp(&b.title));
         results
+    }
+
+    fn matches_tokens(tokens: &HashSet<String>, term: &str) -> bool {
+        if term.is_empty() {
+            return false;
+        }
+        if tokens.contains(term) {
+            return true;
+        }
+        if term.len() < 2 {
+            return false;
+        }
+        tokens.iter().any(|token| token.starts_with(term))
     }
 
     fn filter_by_token(&self, token: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {

@@ -6,6 +6,7 @@ import type {
 	CandidateInput,
 	ParsedQuery,
 	ScoredCandidate,
+	ScoreWeights,
 } from "./types";
 import type { ChipSpan } from "./query-utils";
 import {
@@ -34,6 +35,7 @@ type GraphSearchPluginApi = {
 	buildGraphIndex(): Promise<unknown>;
 	buildSearchIndex(): Promise<unknown>;
 	getSearchContent(path: string): string;
+	getScoreWeights(): ScoreWeights;
 };
 
 export class GraphQueryModal extends Modal {
@@ -211,6 +213,7 @@ export class GraphQueryModal extends Modal {
 			const scored = (await wasm.graph_rank_candidates(
 				parsed.near_titles,
 				candidates,
+				this.plugin.getScoreWeights(),
 			)) as ScoredCandidate[];
 
 			this.results = scored;
