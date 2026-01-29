@@ -117,7 +117,11 @@ impl SearchStore {
         let mut candidate_ids: Option<HashSet<usize>> = None;
 
         for term in terms {
-            let term_lower = term.to_ascii_lowercase();
+            let cleaned = term.trim_matches('"');
+            if cleaned.is_empty() {
+                continue;
+            }
+            let term_lower = cleaned.to_ascii_lowercase();
             let filtered = if let Some(tag) = parse_tag_term(&term_lower) {
                 self.filter_by_tag(&tag, candidate_ids.take())
             } else if let Some(path_term) = parse_path_term(&term_lower) {
@@ -271,6 +275,21 @@ mod tests {
         let results = store.search("budget");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "meetings/budget.md");
+    }
+
+    #[test]
+    fn search_matches_title_word() {
+        let mut store = SearchStore::new();
+        store.build(vec![SearchDocumentInput {
+            title: "Project Plan".to_string(),
+            path: "projects/plan.md".to_string(),
+            body: "Body content".to_string(),
+            tags: Some(vec![]),
+        }]);
+
+        let results = store.search("project");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "projects/plan.md");
     }
 
     #[test]

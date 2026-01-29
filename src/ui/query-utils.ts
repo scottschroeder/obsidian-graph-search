@@ -58,12 +58,38 @@ export function extractSearchTerms(baseQuery: string): string[] {
 		.filter((term) => term.length > 0);
 }
 
+export function extractBodyTerms(baseQuery: string): string[] {
+	return baseQuery
+		.split(/\s+/)
+		.map((term) => term.trim())
+		.filter((term) => term.length > 0)
+		.filter((term) => {
+			const lowered = term.toLowerCase();
+			if (lowered.startsWith("tag:")) {
+				return false;
+			}
+			if (lowered.startsWith("path:")) {
+				return false;
+			}
+			if (lowered.startsWith("file:")) {
+				return false;
+			}
+			if (lowered.startsWith("#")) {
+				return false;
+			}
+			return true;
+		});
+}
+
 export function buildSnippet(body: string, terms: string[]): string {
 	if (!body) {
 		return "";
 	}
 	const cleaned = body.replace(/\s+/g, " ").trim();
 	if (!cleaned) {
+		return "";
+	}
+	if (terms.length === 0) {
 		return "";
 	}
 	const lowered = cleaned.toLowerCase();
@@ -78,11 +104,12 @@ export function buildSnippet(body: string, terms: string[]): string {
 			matchIndex = index;
 		}
 	}
+	if (matchIndex < 0) {
+		return "";
+	}
 	const windowSize = 120;
 	let start = 0;
-	if (matchIndex >= 0) {
-		start = Math.max(0, matchIndex - Math.floor(windowSize / 2));
-	}
+	start = Math.max(0, matchIndex - Math.floor(windowSize / 2));
 	const snippet = cleaned.slice(start, start + windowSize);
 	return highlightSnippet(snippet, terms);
 }

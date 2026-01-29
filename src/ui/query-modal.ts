@@ -11,8 +11,8 @@ import type { ChipSpan } from "./query-utils";
 import {
 	buildEditableHtml,
 	buildSnippet,
+	extractBodyTerms,
 	extractRawFromEditable,
-	extractSearchTerms,
 	findTokenRange,
 	findSpanAtCursor,
 	findTokenAtCursor,
@@ -217,7 +217,7 @@ export class GraphQueryModal extends Modal {
 			this.selectedIndex = scored.length > 0 ? 0 : -1;
 			this.lastCandidateCount = candidates.length;
 			this.lastNearTitles = parsed.near_titles;
-			this.lastSearchTerms = extractSearchTerms(parsed.base_query);
+			this.lastSearchTerms = extractBodyTerms(parsed.base_query);
 			this.renderResults(scored, candidates.length, parsed.near_titles);
 		} catch (error) {
 			console.error("Graph query failed", error);
