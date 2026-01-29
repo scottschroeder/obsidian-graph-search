@@ -36,6 +36,7 @@ type GraphSearchPluginApi = {
 	buildSearchIndex(): Promise<unknown>;
 	getSearchContent(path: string): string;
 	getScoreWeights(): ScoreWeights;
+	isDebugMode(): boolean;
 };
 
 export class GraphQueryModal extends Modal {
@@ -247,9 +248,16 @@ export class GraphQueryModal extends Modal {
 		}
 
 		this.resultsEl.empty();
-		this.statusEl.setText(
-			`Candidates: ${candidateCount}, Near: ${nearTitles.length}, Results: ${results.length}`,
-		);
+		const showDebug = this.plugin.isDebugMode();
+		if (showDebug) {
+			this.statusEl.setText(
+				`Candidates: ${candidateCount}, Near: ${nearTitles.length}, Results: ${results.length}`,
+			);
+			this.statusEl.show();
+		} else {
+			this.statusEl.setText("");
+			this.statusEl.hide();
+		}
 
 		if (results.length === 0) {
 			this.resultsEl.createEl("div", { text: "No results." });
@@ -257,6 +265,7 @@ export class GraphQueryModal extends Modal {
 		}
 
 		const list = this.resultsEl.createDiv();
+		const weights = showDebug ? this.plugin.getScoreWeights() : null;
 		results.slice(0, 50).forEach((entry, index) => {
 			const item = list.createDiv({ cls: "suggestion-item" });
 			item.addClass("graph-search-result");
@@ -273,6 +282,15 @@ export class GraphQueryModal extends Modal {
 			if (snippet) {
 				const snippetEl = item.createDiv({ cls: "graph-search-snippet" });
 				snippetEl.innerHTML = snippet;
+				if (showDebug && weights) {
+					const weightedDistance = entry.distance_score * weights.distance_weight;
+					const weightedTitle = entry.title_score * weights.title_weight;
+					const weightedBody = entry.body_score * weights.body_weight;
+					const debugRow = item.createDiv({ cls: "graph-search-snippet" });
+					debugRow.setText(
+						`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
+					);
+				}
 			}
 
 			item.addEventListener("click", () => {

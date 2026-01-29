@@ -31,6 +31,7 @@ interface GraphSearchPluginSettings {
 	scoreWeightTitle: number;
 	scoreWeightBody: number;
 	scoreDistanceFalloff: number;
+	debugMode: boolean;
 }
 
 type GraphNodeInput = {
@@ -48,6 +49,7 @@ const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 	scoreWeightTitle: 1.0,
 	scoreWeightBody: 1.0,
 	scoreDistanceFalloff: 0.5,
+	debugMode: false,
 };
 
 export default class GraphSearchPlugin extends Plugin {
@@ -212,6 +214,10 @@ export default class GraphSearchPlugin extends Plugin {
 		};
 	}
 
+	isDebugMode() {
+		return this.settings.debugMode;
+	}
+
 	async buildGraphIndex(): Promise<GraphStats> {
 		const files = this.app.vault.getMarkdownFiles();
 		const nodes: GraphNodeInput[] = files.map((file) => ({
@@ -362,6 +368,18 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h2", { text: "Graph Search Settings" });
 		containerEl.createEl("h3", { text: "Advanced Scoring" });
+
+		new Setting(containerEl)
+			.setName("Debug mode")
+			.setDesc("Show scoring breakdown in result previews")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.debugMode)
+					.onChange(async (value) => {
+						this.plugin.settings.debugMode = value;
+						await this.plugin.saveSettings();
+					}),
+			);
 
 		new Setting(containerEl)
 			.setName("Distance weight")
