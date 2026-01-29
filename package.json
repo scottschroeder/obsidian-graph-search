@@ -1,5 +1,5 @@
 {
-	"name": "sample-rust-plugin",
+	"name": "graph-search",
 	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
 	"version": "1.0.0",
 	"main": "main.js",

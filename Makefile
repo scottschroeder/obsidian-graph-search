@@ -4,7 +4,7 @@ CARGO ?= cargo
 YARN ?= yarn
 
 VAULT_DIR ?= $(HOME)/Documents/personal
-PLUGIN_ID ?= obsidian-sample-plugin
+PLUGIN_ID ?= graph-search
 PLUGIN_DIR := $(VAULT_DIR)/.obsidian/plugins/$(PLUGIN_ID)
 
 RUST_SRC := $(shell find src -name \*.rs -print)

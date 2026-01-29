@@ -14,16 +14,16 @@ import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
+interface GraphSearchPluginSettings {
 	mySetting: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 	mySetting: "default",
 };
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class GraphSearchPlugin extends Plugin {
+	settings: GraphSearchPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
@@ -31,7 +31,7 @@ export default class MyPlugin extends Plugin {
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
 			"dice",
-			"Sample Plugin",
+			"Graph Search",
 			(evt: MouseEvent) => {
 				// Called when the user clicks the icon.
 				new Notice("This is a notice!");
@@ -46,25 +46,25 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: "open-sample-modal-simple",
-			name: "Open sample modal (simple)",
+			id: "open-graph-search-modal-simple",
+			name: "Open graph search modal (simple)",
 			callback: () => {
-				new SampleModal(this.app).open();
+				new GraphSearchModal(this.app).open();
 			},
 		});
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
-			id: "sample-editor-command",
-			name: "Sample editor command",
+			id: "graph-search-editor-command",
+			name: "Graph search editor command",
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				console.log(editor.getSelection());
-				editor.replaceSelection("Sample Editor Command");
+				editor.replaceSelection("Graph Search Editor Command");
 			},
 		});
 		// This adds a complex command that can check whether the current state of the app allows execution of the command
 		this.addCommand({
-			id: "open-sample-modal-complex",
-			name: "Open sample modal (complex)",
+			id: "open-graph-search-modal-complex",
+			name: "Open graph search modal (complex)",
 			checkCallback: (checking: boolean) => {
 				// Conditions to check
 				const markdownView =
@@ -73,7 +73,7 @@ export default class MyPlugin extends Plugin {
 					// If checking is true, we're simply "checking" if the command can be run.
 					// If checking is false, then we want to actually perform the operation.
 					if (!checking) {
-						new SampleModal(this.app).open();
+						new GraphSearchModal(this.app).open();
 					}
 
 					// This command will only show up in Command Palette when the check function returns true
@@ -83,7 +83,7 @@ export default class MyPlugin extends Plugin {
 		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new GraphSearchSettingTab(this.app, this));
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
@@ -116,7 +116,7 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
+class GraphSearchModal extends Modal {
 	constructor(app: App) {
 		super(app);
 	}
@@ -132,10 +132,10 @@ class SampleModal extends Modal {
 	}
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+class GraphSearchSettingTab extends PluginSettingTab {
+	plugin: GraphSearchPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: GraphSearchPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}

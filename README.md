@@ -1,4 +1,4 @@
-# Obsidian Sample Plugin (Rust)
+# Graph Search (Rust)
 
 This is a quick proof of concept combining the current [Obsidian Git template](https://github.com/obsidianmd/obsidian-sample-plugin) and an [earlier proof-of-concept](https://github.com/trashhalo/obsidian-rust-plugin). Thanks to @trashhalo who essentially did all the work!
 
@@ -27,14 +27,14 @@ make install
 Overrides:
 
 ```bash
-VAULT_DIR=~/Documents/personal PLUGIN_ID=obsidian-sample-plugin make install
+VAULT_DIR=~/Documents/personal PLUGIN_ID=graph-search make install
 ```
 
 ## Verify in Obsidian
 
 1. Reload Obsidian.
 2. Enable the plugin in Settings → Community plugins.
-3. Open the command palette and run "Sample Plugin: Example Command".
+3. Open the command palette and run "Open graph search modal (simple)".
 4. You should see a "hello from rust" notice.
 
 ## Make targets
@@ -65,7 +65,7 @@ VAULT_DIR=~/Documents/personal PLUGIN_ID=obsidian-sample-plugin make install
 
 The build pipeline compiles Rust to WebAssembly with `wasm-pack`, then bundles the plugin with esbuild. The `main.ts` file loads the generated wasm package from `pkg/`.
 
-To test: run "Sample Plugin: Example Command" from the command palette; you should see a "hello from rust" notice.
+To test: run "Open graph search modal (simple)" from the command palette; you should see a "hello from rust" notice.
 
 I'm leaving the original Obsidian plugin docs below in case it's helpful:
 
