@@ -21,14 +21,61 @@ pub fn tokenize(text: &str) -> Vec<String> {
 }
 
 pub fn extract_tags(text: &str) -> HashSet<String> {
-    tokenize(text)
-        .into_iter()
-        .filter(|token| token.starts_with('#') && token.len() > 1)
-        .collect()
+    let mut tags = HashSet::new();
+    let mut in_fence = false;
+    let mut fence_marker = "";
+    let mut frontmatter_checked = false;
+    let mut in_frontmatter = false;
+
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if !frontmatter_checked {
+            if trimmed.is_empty() {
+                continue;
+            }
+            frontmatter_checked = true;
+            if trimmed == "---" {
+                in_frontmatter = true;
+                continue;
+            }
+        }
+
+        if in_frontmatter {
+            if trimmed == "---" {
+                in_frontmatter = false;
+            }
+            continue;
+        }
+
+        let stripped = line.trim_start();
+        if stripped.starts_with("```") || stripped.starts_with("~~~") {
+            let marker = &stripped[..3];
+            if !in_fence {
+                in_fence = true;
+                fence_marker = marker;
+            } else if stripped.starts_with(fence_marker) {
+                in_fence = false;
+                fence_marker = "";
+            }
+            continue;
+        }
+
+        if in_fence {
+            continue;
+        }
+
+        for token in tokenize(line) {
+            if token.starts_with('#') && token.len() > 1 {
+                tags.insert(token);
+            }
+        }
+    }
+
+    tags
 }
 
 fn is_token_char(ch: char, is_start: bool) -> bool {
-    if ch.is_alphanumeric() || ch == '_' || ch == '-' {
+    if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '/' {
         return true;
     }
     if ch == '#' {
@@ -59,5 +106,27 @@ mod tests {
         let tags = extract_tags("Notes for #ProjectX and #meeting");
         assert!(tags.contains("#projectx"));
         assert!(tags.contains("#meeting"));
+    }
+
+    #[test]
+    fn extract_tags_with_slashes() {
+        let tags = extract_tags("Notes for #project/alpha and #meeting");
+        assert!(tags.contains("#project/alpha"));
+    }
+
+    #[test]
+    fn extract_tags_ignores_frontmatter() {
+        let text = "---\ntags:\n  - log/incident\n---\nBody #keep";
+        let tags = extract_tags(text);
+        assert!(!tags.contains("#log/incident"));
+        assert!(tags.contains("#keep"));
+    }
+
+    #[test]
+    fn extract_tags_ignores_fenced_yaml() {
+        let text = "Example:\n```yaml\ntags: [log/incident]\n#fake\n```\nBody #real";
+        let tags = extract_tags(text);
+        assert!(!tags.contains("#fake"));
+        assert!(tags.contains("#real"));
     }
 }

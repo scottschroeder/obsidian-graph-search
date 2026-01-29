@@ -7,25 +7,27 @@ import type {
 	ParsedQuery,
 	ScoredCandidate,
 } from "./types";
-import type { NearSpan } from "./query-utils";
+import type { ChipSpan } from "./query-utils";
 import {
 	buildEditableHtml,
 	buildSnippet,
 	extractRawFromEditable,
 	extractSearchTerms,
-	findNearTokenRange,
+	findTokenRange,
 	findSpanAtCursor,
 	findTokenAtCursor,
 	formatNearValue,
+	formatTagValue,
 	getCaretOffset,
 	isColonInsert,
 	removeRange,
 	restoreCaretOffset,
 } from "./query-utils";
 import { openTitlePicker } from "./title-suggest";
+import { openTagPicker } from "./tag-suggest";
 
 export type QueryLayout = {
-	near_spans: NearSpan[];
+	spans: ChipSpan[];
 };
 
 type GraphSearchPluginApi = {
@@ -48,7 +50,7 @@ export class GraphQueryModal extends Modal {
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
-	private layout: QueryLayout = { near_spans: [] };
+	private layout: QueryLayout = { spans: [] };
 	private rawQuery = "";
 	private isRendering = false;
 
@@ -115,7 +117,7 @@ export class GraphQueryModal extends Modal {
 			this.rawQuery = raw;
 			this.updateLayout();
 			this.renderEditable(caret);
-			this.maybeSuggestNear(event, raw, caret);
+			this.maybeSuggestChip(event, raw, caret);
 			this.scheduleQuery();
 		});
 
@@ -131,7 +133,7 @@ export class GraphQueryModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	private maybeSuggestNear(event: Event, raw: string, cursor: number) {
+	private maybeSuggestChip(event: Event, raw: string, cursor: number) {
 		if (!this.inputEl || this.isSuggesting) {
 			return;
 		}
@@ -142,32 +144,41 @@ export class GraphQueryModal extends Modal {
 		if (!tokenInfo) {
 			return;
 		}
-		if (!tokenInfo.token.startsWith("near:")) {
+		if (tokenInfo.token.startsWith("near:")) {
+			const afterPrefix = tokenInfo.token.slice(5);
+			if (afterPrefix.length > 0) {
+				return;
+			}
+			this.isSuggesting = true;
+			openTitlePicker(
+				this.app,
+				(selected) => {
+					const formatted = formatNearValue(selected);
+					this.insertChipValue(raw, tokenInfo, "near:", formatted);
+				},
+				() => {
+					this.isSuggesting = false;
+				},
+			);
 			return;
 		}
-		const afterPrefix = tokenInfo.token.slice(5);
-		if (afterPrefix.length > 0) {
-			return;
+		if (tokenInfo.token.startsWith("tag:")) {
+			const afterPrefix = tokenInfo.token.slice(4);
+			if (afterPrefix.length > 0) {
+				return;
+			}
+			this.isSuggesting = true;
+			openTagPicker(
+				this.app,
+				(selected) => {
+					const formatted = formatTagValue(selected);
+					this.insertChipValue(raw, tokenInfo, "tag:", formatted);
+				},
+				() => {
+					this.isSuggesting = false;
+				},
+			);
 		}
-
-		this.isSuggesting = true;
-		openTitlePicker(
-			this.app,
-			(selected) => {
-				const formatted = formatNearValue(selected);
-				const before = raw.slice(0, tokenInfo.start);
-				const after = raw.slice(tokenInfo.end);
-				const needsSpace = after.length === 0 || after[0] !== " ";
-				const replacement = `near:${formatted}${needsSpace ? " " : ""}`;
-				const nextRaw = `${before}${replacement}${after}`;
-				const newCursor = before.length + replacement.length;
-				this.isSuggesting = false;
-				this.setRawQuery(nextRaw, newCursor);
-			},
-			() => {
-				this.isSuggesting = false;
-			},
-		);
 	}
 
 	private async runQuery() {
@@ -278,7 +289,7 @@ export class GraphQueryModal extends Modal {
 			this.layout = wasm.parse_query_layout(raw) as QueryLayout;
 		} catch (error) {
 			console.error("Failed to parse query layout", error);
-			this.layout = { near_spans: [] };
+			this.layout = { spans: [] };
 		}
 	}
 
@@ -289,7 +300,7 @@ export class GraphQueryModal extends Modal {
 		this.isRendering = true;
 		this.inputEl.innerHTML = buildEditableHtml(
 			this.rawQuery,
-			this.layout.near_spans,
+			this.layout.spans,
 		);
 		const offset = caretOffset ?? this.rawQuery.length;
 		restoreCaretOffset(this.inputEl, offset);
@@ -304,6 +315,22 @@ export class GraphQueryModal extends Modal {
 		this.inputEl?.focus();
 	}
 
+	private insertChipValue(
+		raw: string,
+		tokenInfo: { start: number; end: number; token: string },
+		prefix: string,
+		value: string,
+	) {
+		const before = raw.slice(0, tokenInfo.start);
+		const after = raw.slice(tokenInfo.end);
+		const needsSpace = after.length === 0 || after[0] !== " ";
+		const replacement = `${prefix}${value}${needsSpace ? " " : ""}`;
+		const nextRaw = `${before}${replacement}${after}`;
+		const newCursor = before.length + replacement.length;
+		this.isSuggesting = false;
+		this.setRawQuery(nextRaw, newCursor);
+	}
+
 	private handleBackspaceToken(): boolean {
 		if (!this.inputEl) {
 			return false;
@@ -313,20 +340,20 @@ export class GraphQueryModal extends Modal {
 			return false;
 		}
 		const start = getCaretOffset(this.inputEl) ?? 0;
-		let span = findSpanAtCursor(this.layout.near_spans, start);
+		let span = findSpanAtCursor(this.layout.spans, start);
 		const raw = this.rawQuery;
 		if (!span) {
 			span =
-				this.layout.near_spans.find(
+				this.layout.spans.find(
 					(candidate) =>
 						start === candidate.end + 1 &&
 						raw[candidate.end] === '"',
-					) ?? null;
+				) ?? null;
 		}
 		if (!span) {
 			return false;
 		}
-		const tokenRange = findNearTokenRange(raw, span);
+		const tokenRange = findTokenRange(raw, span);
 		if (!tokenRange) {
 			return false;
 		}

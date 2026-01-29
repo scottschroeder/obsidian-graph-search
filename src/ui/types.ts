@@ -23,6 +23,7 @@ export type SearchDocumentInput = {
 	title: string;
 	path: string;
 	body: string;
+	tags?: string[];
 };
 
 export type SearchStats = {

@@ -1,7 +1,8 @@
-export type NearSpan = {
+export type ChipSpan = {
 	start: number;
 	end: number;
 	text: string;
+	prefix: string;
 };
 
 export function findTokenAtCursor(
@@ -27,6 +28,14 @@ export function findTokenAtCursor(
 export function formatNearValue(value: string): string {
 	const trimmed = stripMdExtension(value.trim());
 	return trimmed.includes(" ") ? `"${trimmed}"` : trimmed;
+}
+
+export function formatTagValue(value: string): string {
+	const trimmed = value.trim();
+	if (!trimmed) {
+		return "";
+	}
+	return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
 }
 
 export function extractSearchTerms(baseQuery: string): string[] {
@@ -123,7 +132,7 @@ export function isColonInsert(event: Event): boolean {
 
 export function buildOverlayHtml(
 	value: string,
-	spans: NearSpan[],
+	spans: ChipSpan[],
 	placeholder?: string,
 ): string {
 	if (!value) {
@@ -151,7 +160,7 @@ export function buildOverlayHtml(
 	return html;
 }
 
-export function buildEditableHtml(value: string, spans: NearSpan[]): string {
+export function buildEditableHtml(value: string, spans: ChipSpan[]): string {
 	if (!value) {
 		return "";
 	}
@@ -160,7 +169,7 @@ export function buildEditableHtml(value: string, spans: NearSpan[]): string {
 	let lastIndex = 0;
 
 	for (const span of sorted) {
-		const tokenRange = findNearTokenRange(value, span);
+		const tokenRange = findTokenRange(value, span);
 		if (!tokenRange) {
 			continue;
 		}
@@ -176,9 +185,9 @@ export function buildEditableHtml(value: string, spans: NearSpan[]): string {
 }
 
 export function findSpanAtCursor(
-	spans: NearSpan[],
+	spans: ChipSpan[],
 	cursor: number,
-): NearSpan | null {
+): ChipSpan | null {
 	return (
 		spans.find(
 			(span) => cursor >= span.start && cursor <= span.end,
@@ -186,9 +195,9 @@ export function findSpanAtCursor(
 	);
 }
 
-export function findNearTokenRange(
+export function findTokenRange(
 	value: string,
-	span: NearSpan,
+	span: ChipSpan,
 ): { start: number; end: number } | null {
 	let start = span.start;
 	while (start > 0 && !/\s/.test(value[start - 1])) {
@@ -199,7 +208,7 @@ export function findNearTokenRange(
 		end = span.end + 1;
 	}
 	const token = value.slice(start, end);
-	if (!token.startsWith("near:")) {
+	if (!token.startsWith(span.prefix)) {
 		return null;
 	}
 	return { start, end };
@@ -448,6 +457,11 @@ function findNodeAtRawOffset(
 			const valueLen = parts.value.length;
 			const totalLen = prefixLen + valueLen + parts.suffix.length;
 			if (remaining === 0) {
+				const prev = el.previousSibling;
+				if (prev && prev.nodeType === Node.TEXT_NODE) {
+					result = { node: prev, offset: prev.textContent?.length ?? 0 };
+					return;
+				}
 				const parent = el.parentNode;
 				if (parent) {
 					const index = Array.from(parent.childNodes).indexOf(el);
@@ -456,6 +470,11 @@ function findNodeAtRawOffset(
 				}
 			}
 			if (remaining <= totalLen) {
+				const next = el.nextSibling;
+				if (next && next.nodeType === Node.TEXT_NODE) {
+					result = { node: next, offset: 0 };
+					return;
+				}
 				const parent = el.parentNode;
 				if (parent) {
 					const index = Array.from(parent.childNodes).indexOf(el);

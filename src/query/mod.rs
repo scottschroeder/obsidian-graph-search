@@ -7,15 +7,16 @@ pub struct ParsedQuery {
 }
 
 #[derive(Debug, Serialize)]
-pub struct NearSpan {
+pub struct QuerySpan {
     pub start: usize,
     pub end: usize,
     pub text: String,
+    pub prefix: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct QueryLayout {
-    pub near_spans: Vec<NearSpan>,
+    pub spans: Vec<QuerySpan>,
 }
 
 pub fn parse_query(raw: &str) -> ParsedQuery {
@@ -53,33 +54,23 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
 
 pub fn parse_query_layout(raw: &str) -> QueryLayout {
     let tokens = tokenize_with_spans(raw);
-    let mut near_spans = Vec::new();
+    let mut spans = Vec::new();
 
     let mut index = 0;
     while index < tokens.len() {
         let token = &tokens[index];
         if token.text.starts_with("near:") {
-            let mut value = token.text[5..].to_string();
-            let mut value_start = token.start + 5;
-            let mut value_end = token.end;
-
-            if value.is_empty() {
-                if let Some(next) = tokens.get(index + 1) {
-                    value = next.text.clone();
-                    value_start = next.start;
-                    value_end = next.end;
+            if let Some(span) = build_span(&tokens, index, "near:") {
+                spans.push(span);
+                if token.text == "near:" {
                     index += 1;
                 }
             }
-
-            if !value.is_empty() {
-                let (cleaned, start, end) = strip_quotes_with_span(value, value_start, value_end);
-                if !cleaned.is_empty() {
-                    near_spans.push(NearSpan {
-                        start,
-                        end,
-                        text: cleaned,
-                    });
+        } else if token.text.starts_with("tag:") {
+            if let Some(span) = build_span(&tokens, index, "tag:") {
+                spans.push(span);
+                if token.text == "tag:" {
+                    index += 1;
                 }
             }
         }
@@ -87,7 +78,39 @@ pub fn parse_query_layout(raw: &str) -> QueryLayout {
         index += 1;
     }
 
-    QueryLayout { near_spans }
+    QueryLayout { spans }
+}
+
+fn build_span(tokens: &[TokenSpan], index: usize, prefix: &str) -> Option<QuerySpan> {
+    let token = tokens.get(index)?;
+    let prefix_len = prefix.len();
+    let mut value = token.text[prefix_len..].to_string();
+    let mut value_start = token.start + prefix_len;
+    let mut value_end = token.end;
+
+    if value.is_empty() {
+        if let Some(next) = tokens.get(index + 1) {
+            value = next.text.clone();
+            value_start = next.start;
+            value_end = next.end;
+        }
+    }
+
+    if value.is_empty() {
+        return None;
+    }
+
+    let (cleaned, start, end) = strip_quotes_with_span(value, value_start, value_end);
+    if cleaned.is_empty() {
+        return None;
+    }
+
+    Some(QuerySpan {
+        start,
+        end,
+        text: cleaned,
+        prefix: prefix.to_string(),
+    })
 }
 
 fn strip_quotes(value: String) -> String {
@@ -227,9 +250,19 @@ mod tests {
     #[test]
     fn parse_query_layout_tracks_spans() {
         let layout = parse_query_layout("tag:#meeting near:\"my project\" notes");
-        assert_eq!(layout.near_spans.len(), 1);
-        let span = &layout.near_spans[0];
-        assert_eq!(span.text, "my project");
-        assert!(span.start < span.end);
+        assert_eq!(layout.spans.len(), 2);
+        let near_span = layout
+            .spans
+            .iter()
+            .find(|span| span.prefix == "near:")
+            .expect("missing near span");
+        assert_eq!(near_span.text, "my project");
+        assert!(near_span.start < near_span.end);
+        let tag_span = layout
+            .spans
+            .iter()
+            .find(|span| span.prefix == "tag:")
+            .expect("missing tag span");
+        assert_eq!(tag_span.text, "#meeting");
     }
 }

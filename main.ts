@@ -7,6 +7,7 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TFile,
 } from "obsidian";
 
 import * as plugin from "./pkg/obsidian_rust_plugin";
@@ -220,10 +221,12 @@ export default class GraphSearchPlugin extends Plugin {
 		this.searchContentByPath = new Map();
 		for (const file of files) {
 			const body = await this.app.vault.cachedRead(file);
+			const tagTokens = collectFileTags(this.app, file);
 			docs.push({
 				title: file.basename,
 				path: file.path,
 				body,
+				tags: tagTokens,
 			});
 			this.searchContentByPath.set(file.path, body);
 		}
@@ -278,6 +281,36 @@ function normalizeTitleInput(value: string): string {
 		normalized = normalized.slice(0, -3);
 	}
 	return normalized;
+}
+
+function collectFileTags(app: App, file: TFile): string[] {
+	const cache = app.metadataCache.getFileCache(file);
+	const inlineTags = cache?.tags?.map((tag) => tag.tag) ?? [];
+	const frontmatter = cache?.frontmatter?.tags;
+	const frontmatterTags = collectFrontmatterTags(frontmatter);
+	const combined = [...inlineTags, ...frontmatterTags]
+		.flatMap((tag) => splitTagString(tag))
+		.map((tag) => tag.trim())
+		.filter((tag) => tag.length > 0)
+		.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
+	return Array.from(new Set(combined));
+}
+
+function collectFrontmatterTags(value: unknown): string[] {
+	if (typeof value === "string") {
+		return [value];
+	}
+	if (Array.isArray(value)) {
+		return value.map((entry) => String(entry));
+	}
+	return [];
+}
+
+function splitTagString(value: string): string[] {
+	if (value.includes(",")) {
+		return value.split(",");
+	}
+	return value.split(/\s+/);
 }
 
 class GraphSearchModal extends Modal {

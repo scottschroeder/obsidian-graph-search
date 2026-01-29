@@ -19,8 +19,12 @@ describe("wasm integration", () => {
 	it("parses query and layout", () => {
 		const parsed = wasm.parse_query("budget near:alpha");
 		expect(parsed.near_titles).toEqual(["alpha"]);
-		const layout = wasm.parse_query_layout("near:\"alpha beta\"");
-		expect(layout.near_spans.length).toBe(1);
+		const layout = wasm.parse_query_layout(
+			"near:\"alpha beta\" tag:#meeting",
+		);
+		expect(layout.spans.length).toBe(2);
+		const prefixes = layout.spans.map((span: any) => span.prefix).sort();
+		expect(prefixes).toEqual(["near:", "tag:"]);
 	});
 
 	it("indexes and searches documents", () => {

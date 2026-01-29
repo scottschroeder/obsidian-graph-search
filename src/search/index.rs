@@ -4,13 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::CandidateInput;
 
-use super::tokenize::{extract_tags, tokenize};
+use super::tokenize::tokenize;
 
 #[derive(Debug, Deserialize)]
 pub struct SearchDocumentInput {
     pub title: String,
     pub path: String,
     pub body: String,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,8 +64,12 @@ impl SearchStore {
                 tokens.insert(token);
             }
 
-            for tag in extract_tags(&doc.body) {
-                tags.insert(tag);
+            if let Some(input_tags) = doc.tags {
+                for tag in input_tags {
+                    if let Some(normalized) = normalize_tag(&tag) {
+                        tags.insert(normalized);
+                    }
+                }
             }
 
             let document = SearchDocument {
@@ -200,17 +206,30 @@ fn intersect_sets(current: Option<HashSet<usize>>, next: HashSet<usize>) -> Hash
 fn parse_tag_term(term: &str) -> Option<String> {
     if term.starts_with("tag:") {
         let value = term.trim_start_matches("tag:");
-        let normalized = if value.starts_with('#') {
-            value.to_string()
-        } else {
-            format!("#{}", value)
-        };
-        return Some(normalized);
+        return normalize_tag(value);
     }
     if term.starts_with('#') && term.len() > 1 {
-        return Some(term.to_string());
+        return normalize_tag(term);
     }
     None
+}
+
+fn normalize_tag(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let normalized = if trimmed.starts_with('#') {
+        trimmed.to_string()
+    } else {
+        format!("#{}", trimmed)
+    };
+    let lowered = normalized.to_ascii_lowercase();
+    if lowered.len() <= 1 {
+        None
+    } else {
+        Some(lowered)
+    }
 }
 
 fn parse_path_term(term: &str) -> Option<String> {
@@ -234,11 +253,13 @@ mod tests {
                 title: "Budget Meeting".to_string(),
                 path: "meetings/budget.md".to_string(),
                 body: "Agenda for #meeting budget review".to_string(),
+                tags: Some(vec!["#meeting".to_string()]),
             },
             SearchDocumentInput {
                 title: "Project Plan".to_string(),
                 path: "projects/plan.md".to_string(),
                 body: "#project plan scope".to_string(),
+                tags: Some(vec!["#project".to_string()]),
             },
         ]);
         store
@@ -276,11 +297,13 @@ mod tests {
                 title: "Iterate".to_string(),
                 path: "notes/iterate.md".to_string(),
                 body: "".to_string(),
+                tags: Some(vec![]),
             },
             SearchDocumentInput {
                 title: "Iterator".to_string(),
                 path: "notes/iterator.md".to_string(),
                 body: "".to_string(),
+                tags: Some(vec![]),
             },
         ]);
 
@@ -288,5 +311,28 @@ mod tests {
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert!(paths.contains(&"notes/iterate.md".to_string()));
         assert!(paths.contains(&"notes/iterator.md".to_string()));
+    }
+
+    #[test]
+    fn tag_search_ignores_plain_text() {
+        let mut store = SearchStore::new();
+        store.build(vec![
+            SearchDocumentInput {
+                title: "Log Note".to_string(),
+                path: "logs/note.md".to_string(),
+                body: "log/incident timeline".to_string(),
+                tags: Some(vec![]),
+            },
+            SearchDocumentInput {
+                title: "Tagged Note".to_string(),
+                path: "logs/tagged.md".to_string(),
+                body: "".to_string(),
+                tags: Some(vec!["log/incident".to_string()]),
+            },
+        ]);
+
+        let results = store.search("tag:log/incident");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "logs/tagged.md");
     }
 }
