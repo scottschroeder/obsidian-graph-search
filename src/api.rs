@@ -43,6 +43,12 @@ pub fn parse_query(raw: String) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn parse_query_layout(raw: String) -> Result<JsValue, JsValue> {
+    let layout = query::parse_query_layout(&raw);
+    swb::to_value(&layout).map_err(|err| err.into())
+}
+
+#[wasm_bindgen]
 pub fn graph_rank_candidates(
     near_titles: JsValue,
     candidates: JsValue,

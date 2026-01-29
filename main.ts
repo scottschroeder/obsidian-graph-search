@@ -40,6 +40,16 @@ type ParsedQuery = {
 	base_query: string;
 };
 
+type QueryLayout = {
+	near_spans: NearSpan[];
+};
+
+type NearSpan = {
+	start: number;
+	end: number;
+	text: string;
+};
+
 type CandidateInput = {
 	title: string;
 	path: string;
@@ -328,13 +338,15 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 
 	return files.map((file) => {
 		const hasDuplicate = (counts.get(file.basename) ?? 0) > 1;
-		const value = file.path;
+		const value = hasDuplicate
+			? stripMdExtension(file.path)
+			: file.basename;
 		const label = hasDuplicate
-			? `${file.basename} - ${file.path}`
+			? `${file.basename} - ${stripMdExtension(file.path)}`
 			: file.basename;
 		return {
 			title: file.basename,
-			path: file.path,
+			path: hasDuplicate ? stripMdExtension(file.path) : file.basename,
 			value,
 			label,
 		};
@@ -362,7 +374,7 @@ function findTokenAtCursor(
 }
 
 function formatNearValue(value: string): string {
-	const trimmed = value.trim();
+	const trimmed = stripMdExtension(value.trim());
 	return trimmed.includes(" ") ? `"${trimmed}"` : trimmed;
 }
 
@@ -445,6 +457,88 @@ function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function stripMdExtension(value: string): string {
+	return value.toLowerCase().endsWith(".md") ? value.slice(0, -3) : value;
+}
+
+function isColonInsert(event: Event): boolean {
+	if (!(event instanceof InputEvent)) {
+		return false;
+	}
+	return event.inputType === "insertText" && event.data === ":";
+}
+
+function buildOverlayHtml(
+	value: string,
+	spans: NearSpan[],
+	placeholder?: string,
+): string {
+	if (!value) {
+		const text = placeholder ? escapeHtml(placeholder) : "";
+		return `<span class="graph-search-placeholder">${text}</span>`;
+	}
+	const sorted = [...spans].sort((a, b) => a.start - b.start);
+	let html = "";
+	let lastIndex = 0;
+
+	for (const span of sorted) {
+		let beforeEnd = span.start;
+		if (span.start > 0 && value[span.start - 1] === '"') {
+			beforeEnd = span.start - 1;
+		}
+		html += escapeHtml(value.slice(lastIndex, beforeEnd));
+		html += `<span class="graph-search-chip">${escapeHtml(span.text)}</span>`;
+		lastIndex = span.end;
+		if (value[span.end] === '"') {
+			lastIndex = span.end + 1;
+		}
+	}
+
+	html += escapeHtml(value.slice(lastIndex));
+	return html;
+}
+
+function findSpanAtCursor(spans: NearSpan[], cursor: number): NearSpan | null {
+	return (
+		spans.find(
+			(span) => cursor >= span.start && cursor <= span.end,
+		) ?? null
+	);
+}
+
+function findNearTokenRange(
+	value: string,
+	span: NearSpan,
+): { start: number; end: number } | null {
+	let start = span.start;
+	while (start > 0 && !/\s/.test(value[start - 1])) {
+		start -= 1;
+	}
+	let end = span.end;
+	if (value[span.end] === '"') {
+		end = span.end + 1;
+	}
+	const token = value.slice(start, end);
+	if (!token.startsWith("near:")) {
+		return null;
+	}
+	return { start, end };
+}
+
+function removeRange(
+	value: string,
+	start: number,
+	end: number,
+): { value: string; cursor: number } {
+	let newValue = value.slice(0, start) + value.slice(end);
+	let cursor = start;
+	if (start > 0 && newValue[start - 1] === " " && newValue[start] === " ") {
+		newValue = newValue.slice(0, start) + newValue.slice(start + 1);
+		cursor = start;
+	}
+	return { value: newValue, cursor: Math.min(cursor, newValue.length) };
+}
+
 class GraphSearchModal extends Modal {
 	constructor(app: App) {
 		super(app);
@@ -475,6 +569,8 @@ class GraphQueryModal extends Modal {
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
+	private layout: QueryLayout = { near_spans: [] };
+	private overlayEl?: HTMLDivElement;
 
 	constructor(app: App, plugin: GraphSearchPlugin) {
 		super(app);
@@ -486,10 +582,16 @@ class GraphQueryModal extends Modal {
 		contentEl.empty();
 		this.modalEl.addClass("prompt");
 
-		this.inputEl = contentEl.createEl("input", {
+		const inputWrapper = contentEl.createDiv({
+			cls: "graph-search-input-wrapper",
+		});
+		this.overlayEl = inputWrapper.createDiv({
+			cls: "graph-search-input-overlay",
+		});
+		this.inputEl = inputWrapper.createEl("input", {
 			type: "text",
 			placeholder: "budget tag:#meeting near:ExactFile",
-			cls: "graph-search-input prompt-input",
+			cls: "graph-search-input prompt-input graph-search-input-raw",
 		});
 
 		this.statusEl = contentEl.createDiv({ cls: "graph-search-status" });
@@ -516,13 +618,21 @@ class GraphQueryModal extends Modal {
 			if (event.key === "Escape") {
 				this.close();
 			}
+			if (event.key === "Backspace") {
+				if (this.handleBackspaceToken()) {
+					event.preventDefault();
+				}
+			}
 		});
 
-		this.inputEl.addEventListener("input", () => {
-			this.maybeSuggestNear();
+		this.inputEl.addEventListener("input", (event) => {
+			this.updateLayout();
+			this.maybeSuggestNear(event);
 			this.scheduleQuery();
+			this.syncOverlayScroll();
 		});
 
+		this.updateLayout();
 		this.inputEl.focus();
 	}
 
@@ -533,8 +643,11 @@ class GraphQueryModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	private maybeSuggestNear() {
+	private maybeSuggestNear(event: Event) {
 		if (!this.inputEl || this.isSuggesting) {
+			return;
+		}
+		if (!isColonInsert(event)) {
 			return;
 		}
 
@@ -568,6 +681,7 @@ class GraphQueryModal extends Modal {
 				this.inputEl.setSelectionRange(newCursor, newCursor);
 				this.inputEl.focus();
 				this.isSuggesting = false;
+				this.updateLayout();
 				this.scheduleQuery();
 			},
 			() => {
@@ -676,6 +790,63 @@ class GraphQueryModal extends Modal {
 		if (selected instanceof HTMLElement) {
 			selected.scrollIntoView({ block: "nearest" });
 		}
+	}
+
+	private updateLayout() {
+		if (!this.inputEl || !this.overlayEl) {
+			return;
+		}
+		const raw = this.inputEl.value;
+		try {
+			this.layout = plugin.parse_query_layout(raw) as QueryLayout;
+		} catch (error) {
+			console.error("Failed to parse query layout", error);
+			this.layout = { near_spans: [] };
+		}
+		this.overlayEl.innerHTML = buildOverlayHtml(
+			raw,
+			this.layout.near_spans,
+			this.inputEl.placeholder,
+		);
+	}
+
+	private handleBackspaceToken(): boolean {
+		if (!this.inputEl) {
+			return false;
+		}
+		const start = this.inputEl.selectionStart ?? 0;
+		const end = this.inputEl.selectionEnd ?? 0;
+		if (start !== end) {
+			return false;
+		}
+		let span = findSpanAtCursor(this.layout.near_spans, start);
+		const raw = this.inputEl.value;
+		if (!span) {
+			span = this.layout.near_spans.find(
+				(candidate) =>
+					start === candidate.end + 1 && raw[candidate.end] === '"',
+			) ?? null;
+		}
+		if (!span) {
+			return false;
+		}
+		const tokenRange = findNearTokenRange(raw, span);
+		if (!tokenRange) {
+			return false;
+		}
+		const updated = removeRange(raw, tokenRange.start, tokenRange.end);
+		this.inputEl.value = updated.value;
+		this.inputEl.setSelectionRange(updated.cursor, updated.cursor);
+		this.updateLayout();
+		this.scheduleQuery();
+		return true;
+	}
+
+	private syncOverlayScroll() {
+		if (!this.inputEl || !this.overlayEl) {
+			return;
+		}
+		this.overlayEl.scrollLeft = this.inputEl.scrollLeft;
 	}
 
 	private moveSelection(delta: number) {

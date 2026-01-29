@@ -109,6 +109,8 @@ impl GraphStore {
             vec![node]
         } else if let Some(node) = self.path_index.get(title).copied() {
             vec![node]
+        } else if let Some(node) = self.path_index.get(&path_with_md(title)).copied() {
+            vec![node]
         } else {
             Vec::new()
         };
@@ -234,8 +236,19 @@ impl GraphStore {
         if let Some(node) = self.path_index.get(value).copied() {
             return Some(node);
         }
+        if let Some(node) = self.path_index.get(&path_with_md(value)).copied() {
+            return Some(node);
+        }
         let key = normalize_title_key(value);
         self.title_index.get(&key).copied()
+    }
+}
+
+fn path_with_md(value: &str) -> String {
+    if value.contains('/') && !value.ends_with(".md") {
+        format!("{}.md", value)
+    } else {
+        value.to_string()
     }
 }
 
