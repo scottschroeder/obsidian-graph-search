@@ -4,14 +4,17 @@
 	"version": "1.0.0",
 	"main": "main.js",
 	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"wasm": "wasm-pack build --target web && node -e \"require('fs').rmSync('pkg/obsidian_rust_plugin_bg.wasm.d.ts', { force: true })\"",
+		"dev": "yarn run wasm && node esbuild.config.mjs",
+		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
+		"@codemirror/state": "^6.0.0",
+		"@codemirror/view": "^6.0.0",
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
 		"@typescript-eslint/parser": "5.29.0",

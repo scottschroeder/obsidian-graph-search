@@ -6,8 +6,30 @@ How to use:
 
 1. Create a new repo with this one as a template.
 2. Make sure Rust & cargo are installed (I used `rustup`).
-3. Install `wasm-pack` [link](https://rustwasm.github.io/wasm-pack/installer/).
-4. Follow the steps here to set up the sample plugin: [Obsidian plugin setup](https://marcus.se.net/obsidian-plugin-docs/getting-started/create-your-first-plugin), ideally using the `yarn` instructions (I haven't tested the npm version).
+3. Install `wasm-pack` [docs](https://drager.github.io/wasm-pack/).
+4. Install Node dependencies with `yarn install` (recommended) or `npm install`.
+5. Follow the steps here to set up the sample plugin: [Obsidian plugin setup](https://marcus.se.net/obsidian-plugin-docs/getting-started/create-your-first-plugin), ideally using the `yarn` instructions (I haven't tested the npm version).
+
+## Quick install to your vault
+
+Use the Makefile to build and copy the plugin into your vault's plugins folder:
+
+```bash
+make install
+```
+
+Overrides:
+
+```bash
+VAULT_DIR=~/Documents/personal PLUGIN_ID=obsidian-sample-plugin make install
+```
+
+## Verify in Obsidian
+
+1. Reload Obsidian.
+2. Enable the plugin in Settings → Community plugins.
+3. Open the command palette and run "Sample Plugin: Example Command".
+4. You should see a "hello from rust" notice.
 
 Setting up yarn will install and run the `esbuild-plugin-wasm-pack` plugin, which compiles the Rust code (in `src/`) and puts the resulting packed WebAssembly into `pkg/` (NOTE: this generated folder will have a `.gitignore`, which you will need to remove to distribute your plugin). The `main.ts` file then loads that code.
 

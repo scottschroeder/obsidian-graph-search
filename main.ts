@@ -1,7 +1,7 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
-import * as plugin from "./pkg/obsidian_rust_plugin.js";
-import * as wasmbin from './pkg/obsidian_rust_plugin_bg.wasm';
+import * as plugin from "./pkg/obsidian_rust_plugin";
+import wasmBinary from './pkg/obsidian_rust_plugin_bg.wasm';
 
 // Remember to rename these classes and interfaces!
 
@@ -81,7 +81,7 @@ export default class MyPlugin extends Plugin {
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 
 		// here's the Rust bit
-		await plugin.default(Promise.resolve(wasmbin.default));
+		await plugin.default(Promise.resolve(wasmBinary));
 		plugin.onload(this);
 	}
 

@@ -20,5 +20,8 @@
   },
   "include": [
     "**/*.ts"
+  ],
+  "exclude": [
+    "pkg/**/*.wasm.d.ts"
   ]
 }

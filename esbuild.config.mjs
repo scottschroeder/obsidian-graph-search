@@ -1,8 +1,6 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from 'builtin-modules'
-import pkg from 'esbuild-plugin-wasm-pack';
-const { wasmPack } = pkg;
 
 const banner =
     `/*
@@ -73,9 +71,5 @@ esbuild.build({
     outfile: 'main.js',
     plugins: [
         wasmPlugin,
-        wasmPack({
-            'target': 'web'
-            // put wasm-pack plugin options
-        }),
     ],
 }).catch(() => process.exit(1));
