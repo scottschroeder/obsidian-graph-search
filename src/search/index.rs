@@ -143,7 +143,12 @@ impl SearchStore {
     fn filter_by_token(&self, token: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
         let postings = self.index.get(token).cloned().unwrap_or_default();
         let postings_set: HashSet<usize> = postings.into_iter().collect();
-        intersect_sets(current, postings_set)
+        if !postings_set.is_empty() {
+            return intersect_sets(current, postings_set);
+        }
+
+        let prefix_matches = self.prefix_postings(token);
+        intersect_sets(current, prefix_matches)
     }
 
     fn filter_by_tag(&self, tag: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
@@ -168,6 +173,19 @@ impl SearchStore {
                     .unwrap_or(false)
             })
             .collect()
+    }
+
+    fn prefix_postings(&self, prefix: &str) -> HashSet<usize> {
+        if prefix.len() < 2 {
+            return HashSet::new();
+        }
+        let mut results = HashSet::new();
+        for (token, postings) in &self.index {
+            if token.starts_with(prefix) {
+                results.extend(postings.iter().copied());
+            }
+        }
+        results
     }
 }
 
@@ -248,5 +266,27 @@ mod tests {
         let results = store.search("path:projects");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "projects/plan.md");
+    }
+
+    #[test]
+    fn search_prefix_matches_tokens() {
+        let mut store = SearchStore::new();
+        store.build(vec![
+            SearchDocumentInput {
+                title: "Iterate".to_string(),
+                path: "notes/iterate.md".to_string(),
+                body: "".to_string(),
+            },
+            SearchDocumentInput {
+                title: "Iterator".to_string(),
+                path: "notes/iterator.md".to_string(),
+                body: "".to_string(),
+            },
+        ]);
+
+        let results = store.search("iterat");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert!(paths.contains(&"notes/iterate.md".to_string()));
+        assert!(paths.contains(&"notes/iterator.md".to_string()));
     }
 }
