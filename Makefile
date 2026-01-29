@@ -56,7 +56,7 @@ rust-fmt:
 js-fmt:
 	$(YARN) run fmt
 
-test: rust-test js-test
+test: preflight deps rust-test js-test
 
 rust-test:
 	$(CARGO) test

@@ -9,7 +9,7 @@
 		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "tsc -noEmit -skipLibCheck",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
-		"test": "node -e \"console.log('No JS tests configured')\"",
+		"test": "yarn run wasm && vitest run",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
@@ -26,6 +26,7 @@
 		"obsidian": "latest",
 		"prettier": "^3.2.5",
 		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"typescript": "4.7.4",
+		"vitest": "^1.6.0"
 	}
 }
