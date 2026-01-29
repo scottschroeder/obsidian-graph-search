@@ -17,29 +17,28 @@ If your plugin does not need CSS, delete this file.
 .graph-search-input {
 	width: 100%;
 	font-size: 1.05rem;
+	padding: 0.45rem 0.65rem;
+	line-height: 1.4;
 }
 
 .graph-search-input-wrapper {
 	position: relative;
 }
 
-.graph-search-input-overlay {
-	position: absolute;
-	inset: 0;
-	padding: 0.45rem 0.65rem;
-	font-size: 1.05rem;
-	line-height: 1.4;
-	white-space: pre;
-	color: var(--text-normal);
-	pointer-events: none;
-	overflow: hidden;
-}
-
 .graph-search-input-raw {
-	color: transparent;
 	caret-color: var(--text-normal);
 	position: relative;
 	background: transparent;
+	outline: none;
+	white-space: pre;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.graph-search-input-raw:empty::before {
+	content: attr(data-placeholder);
+	color: var(--text-muted);
+	pointer-events: none;
 }
 
 .graph-search-placeholder {
@@ -47,12 +46,18 @@ If your plugin does not need CSS, delete this file.
 }
 
 .graph-search-chip {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
 	padding: 0 0.35rem;
 	border-radius: 999px;
 	background: var(--background-modifier-hover);
 	border: 1px solid var(--background-modifier-border);
 	color: var(--text-normal);
+	user-select: none;
+}
+
+.graph-search-chip-hidden {
+	display: none;
 }
 
 .graph-search-result {

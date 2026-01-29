@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import * as path from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -6,9 +7,9 @@ import { initSync } from "../pkg/obsidian_rust_plugin.js";
 import * as wasm from "../pkg/obsidian_rust_plugin.js";
 
 beforeAll(() => {
-	const wasmPath = new URL(
-		"../pkg/obsidian_rust_plugin_bg.wasm",
-		import.meta.url,
+	const wasmPath = path.resolve(
+		process.cwd(),
+		"pkg/obsidian_rust_plugin_bg.wasm",
 	);
 	const bytes = readFileSync(wasmPath);
 	initSync({ module: bytes });

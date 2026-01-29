@@ -9,15 +9,18 @@ import type {
 } from "./types";
 import type { NearSpan } from "./query-utils";
 import {
-	buildOverlayHtml,
+	buildEditableHtml,
 	buildSnippet,
+	extractRawFromEditable,
 	extractSearchTerms,
 	findNearTokenRange,
 	findSpanAtCursor,
 	findTokenAtCursor,
 	formatNearValue,
+	getCaretOffset,
 	isColonInsert,
 	removeRange,
+	restoreCaretOffset,
 } from "./query-utils";
 import { openTitlePicker } from "./title-suggest";
 
@@ -33,10 +36,9 @@ type GraphSearchPluginApi = {
 
 export class GraphQueryModal extends Modal {
 	private plugin: GraphSearchPluginApi;
-	private inputEl?: HTMLInputElement;
+	private inputEl?: HTMLDivElement;
 	private resultsEl?: HTMLDivElement;
 	private statusEl?: HTMLDivElement;
-	private overlayEl?: HTMLDivElement;
 	private isSuggesting = false;
 	private results: ScoredCandidate[] = [];
 	private selectedIndex = -1;
@@ -47,6 +49,8 @@ export class GraphQueryModal extends Modal {
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
 	private layout: QueryLayout = { near_spans: [] };
+	private rawQuery = "";
+	private isRendering = false;
 
 	constructor(app: App, plugin: GraphSearchPluginApi) {
 		super(app);
@@ -61,14 +65,15 @@ export class GraphQueryModal extends Modal {
 		const inputWrapper = contentEl.createDiv({
 			cls: "graph-search-input-wrapper",
 		});
-		this.overlayEl = inputWrapper.createDiv({
-			cls: "graph-search-input-overlay",
-		});
-		this.inputEl = inputWrapper.createEl("input", {
-			type: "text",
-			placeholder: "budget tag:#meeting near:ExactFile",
+		this.inputEl = inputWrapper.createDiv({
 			cls: "graph-search-input prompt-input graph-search-input-raw",
 		});
+		this.inputEl.setAttribute("contenteditable", "true");
+		this.inputEl.setAttribute("spellcheck", "false");
+		this.inputEl.setAttribute(
+			"data-placeholder",
+			"budget tag:#meeting near:ExactFile",
+		);
 
 		this.statusEl = contentEl.createDiv({ cls: "graph-search-status" });
 		this.resultsEl = contentEl.createDiv({
@@ -102,13 +107,20 @@ export class GraphQueryModal extends Modal {
 		});
 
 		this.inputEl.addEventListener("input", (event) => {
+			if (this.isRendering) {
+				return;
+			}
+			const raw = extractRawFromEditable(this.inputEl as HTMLElement);
+			const caret = getCaretOffset(this.inputEl as HTMLElement) ?? raw.length;
+			this.rawQuery = raw;
 			this.updateLayout();
-			this.maybeSuggestNear(event);
+			this.renderEditable(caret);
+			this.maybeSuggestNear(event, raw, caret);
 			this.scheduleQuery();
-			this.syncOverlayScroll();
 		});
 
 		this.updateLayout();
+		this.renderEditable(0);
 		this.inputEl.focus();
 	}
 
@@ -119,16 +131,14 @@ export class GraphQueryModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	private maybeSuggestNear(event: Event) {
+	private maybeSuggestNear(event: Event, raw: string, cursor: number) {
 		if (!this.inputEl || this.isSuggesting) {
 			return;
 		}
 		if (!isColonInsert(event)) {
 			return;
 		}
-
-		const cursor = this.inputEl.selectionStart ?? this.inputEl.value.length;
-		const tokenInfo = findTokenAtCursor(this.inputEl.value, cursor);
+		const tokenInfo = findTokenAtCursor(raw, cursor);
 		if (!tokenInfo) {
 			return;
 		}
@@ -144,21 +154,15 @@ export class GraphQueryModal extends Modal {
 		openTitlePicker(
 			this.app,
 			(selected) => {
-				if (!this.inputEl) {
-					this.isSuggesting = false;
-					return;
-				}
 				const formatted = formatNearValue(selected);
-				const before = this.inputEl.value.slice(0, tokenInfo.start);
-				const after = this.inputEl.value.slice(tokenInfo.end);
-				const replacement = `near:${formatted}`;
-				this.inputEl.value = `${before}${replacement}${after}`;
+				const before = raw.slice(0, tokenInfo.start);
+				const after = raw.slice(tokenInfo.end);
+				const needsSpace = after.length === 0 || after[0] !== " ";
+				const replacement = `near:${formatted}${needsSpace ? " " : ""}`;
+				const nextRaw = `${before}${replacement}${after}`;
 				const newCursor = before.length + replacement.length;
-				this.inputEl.setSelectionRange(newCursor, newCursor);
-				this.inputEl.focus();
 				this.isSuggesting = false;
-				this.updateLayout();
-				this.scheduleQuery();
+				this.setRawQuery(nextRaw, newCursor);
 			},
 			() => {
 				this.isSuggesting = false;
@@ -167,10 +171,10 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private async runQuery() {
-		if (!this.inputEl || !this.resultsEl || !this.statusEl) {
+		if (!this.resultsEl || !this.statusEl) {
 			return;
 		}
-		const rawQuery = this.inputEl.value.trim();
+		const rawQuery = this.rawQuery.trim();
 		if (!rawQuery) {
 			this.results = [];
 			this.selectedIndex = -1;
@@ -269,34 +273,48 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private updateLayout() {
-		if (!this.inputEl || !this.overlayEl) {
-			return;
-		}
-		const raw = this.inputEl.value;
+		const raw = this.rawQuery;
 		try {
 			this.layout = wasm.parse_query_layout(raw) as QueryLayout;
 		} catch (error) {
 			console.error("Failed to parse query layout", error);
 			this.layout = { near_spans: [] };
 		}
-		this.overlayEl.innerHTML = buildOverlayHtml(
-			raw,
+	}
+
+	private renderEditable(caretOffset?: number) {
+		if (!this.inputEl) {
+			return;
+		}
+		this.isRendering = true;
+		this.inputEl.innerHTML = buildEditableHtml(
+			this.rawQuery,
 			this.layout.near_spans,
-			this.inputEl.placeholder,
 		);
+		const offset = caretOffset ?? this.rawQuery.length;
+		restoreCaretOffset(this.inputEl, offset);
+		this.isRendering = false;
+	}
+
+	private setRawQuery(raw: string, caretOffset?: number) {
+		this.rawQuery = raw;
+		this.updateLayout();
+		this.renderEditable(caretOffset);
+		this.scheduleQuery();
+		this.inputEl?.focus();
 	}
 
 	private handleBackspaceToken(): boolean {
 		if (!this.inputEl) {
 			return false;
 		}
-		const start = this.inputEl.selectionStart ?? 0;
-		const end = this.inputEl.selectionEnd ?? 0;
-		if (start !== end) {
+		const selection = window.getSelection();
+		if (selection && !selection.isCollapsed) {
 			return false;
 		}
+		const start = getCaretOffset(this.inputEl) ?? 0;
 		let span = findSpanAtCursor(this.layout.near_spans, start);
-		const raw = this.inputEl.value;
+		const raw = this.rawQuery;
 		if (!span) {
 			span =
 				this.layout.near_spans.find(
@@ -313,18 +331,8 @@ export class GraphQueryModal extends Modal {
 			return false;
 		}
 		const updated = removeRange(raw, tokenRange.start, tokenRange.end);
-		this.inputEl.value = updated.value;
-		this.inputEl.setSelectionRange(updated.cursor, updated.cursor);
-		this.updateLayout();
-		this.scheduleQuery();
+		this.setRawQuery(updated.value, updated.cursor);
 		return true;
-	}
-
-	private syncOverlayScroll() {
-		if (!this.inputEl || !this.overlayEl) {
-			return;
-		}
-		this.overlayEl.scrollLeft = this.inputEl.scrollLeft;
 	}
 
 	private moveSelection(delta: number) {

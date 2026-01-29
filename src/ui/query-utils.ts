@@ -106,6 +106,10 @@ export function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function escapeHtmlAttribute(value: string): string {
+	return escapeHtml(value).replace(/\n/g, "&#10;");
+}
+
 export function stripMdExtension(value: string): string {
 	return value.toLowerCase().endsWith(".md") ? value.slice(0, -3) : value;
 }
@@ -141,6 +145,30 @@ export function buildOverlayHtml(
 		if (value[span.end] === '"') {
 			lastIndex = span.end + 1;
 		}
+	}
+
+	html += escapeHtml(value.slice(lastIndex));
+	return html;
+}
+
+export function buildEditableHtml(value: string, spans: NearSpan[]): string {
+	if (!value) {
+		return "";
+	}
+	const sorted = [...spans].sort((a, b) => a.start - b.start);
+	let html = "";
+	let lastIndex = 0;
+
+	for (const span of sorted) {
+		const tokenRange = findNearTokenRange(value, span);
+		if (!tokenRange) {
+			continue;
+		}
+		html += escapeHtml(value.slice(lastIndex, tokenRange.start));
+		const prefix = value.slice(tokenRange.start, span.start);
+		const suffix = value.slice(span.end, tokenRange.end);
+		html += `<span class="graph-search-chip" contenteditable="false" data-raw-prefix="${escapeHtmlAttribute(prefix)}" data-raw-suffix="${escapeHtmlAttribute(suffix)}"><span class="graph-search-chip-hidden">${escapeHtml(prefix)}</span><span class="graph-search-chip-value">${escapeHtml(span.text)}</span><span class="graph-search-chip-hidden">${escapeHtml(suffix)}</span></span>`;
+		lastIndex = tokenRange.end;
 	}
 
 	html += escapeHtml(value.slice(lastIndex));
@@ -189,4 +217,278 @@ export function removeRange(
 		cursor = start;
 	}
 	return { value: newValue, cursor: Math.min(cursor, newValue.length) };
+}
+
+export function extractRawFromEditable(root: HTMLElement): string {
+	let raw = "";
+	root.childNodes.forEach((node) => {
+		raw += extractRawFromNode(node);
+	});
+	return raw;
+}
+
+export function getCaretOffset(root: HTMLElement): number | null {
+	const selection = window.getSelection();
+	if (!selection || selection.rangeCount === 0) {
+		return null;
+	}
+	const range = selection.getRangeAt(0);
+	if (!root.contains(range.startContainer)) {
+		return null;
+	}
+	return computeRawOffset(root, range.startContainer, range.startOffset);
+}
+
+export function restoreCaretOffset(root: HTMLElement, rawOffset: number) {
+	const selection = window.getSelection();
+	if (!selection) {
+		return;
+	}
+	const range = document.createRange();
+	const target = findNodeAtRawOffset(root, rawOffset);
+	if (target) {
+		range.setStart(target.node, target.offset);
+		range.collapse(true);
+		selection.removeAllRanges();
+		selection.addRange(range);
+		return;
+	}
+	if (root.childNodes.length > 0) {
+		const lastNode = root.childNodes[root.childNodes.length - 1];
+		const endTarget = findEndPosition(lastNode);
+		range.setStart(endTarget.node, endTarget.offset);
+	} else {
+		range.setStart(root, 0);
+	}
+	range.collapse(true);
+	selection.removeAllRanges();
+	selection.addRange(range);
+}
+
+function extractRawFromNode(node: Node): string {
+	if (node.nodeType === Node.TEXT_NODE) {
+		return node.textContent ?? "";
+	}
+	if (node.nodeType !== Node.ELEMENT_NODE) {
+		return "";
+	}
+	const el = node as HTMLElement;
+	if (el.classList.contains("graph-search-chip")) {
+		const parts = getChipParts(el);
+		return parts.prefix + parts.value + parts.suffix;
+	}
+	let raw = "";
+	el.childNodes.forEach((child) => {
+		raw += extractRawFromNode(child);
+	});
+	return raw;
+}
+
+function computeRawOffset(
+	root: HTMLElement,
+	targetNode: Node,
+	targetOffset: number,
+): number {
+	let offset = 0;
+	let found = false;
+	const walk = (node: Node) => {
+		if (found) {
+			return;
+		}
+		if (node === targetNode) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				offset += targetOffset;
+				found = true;
+				return;
+			}
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				const children = Array.from(node.childNodes);
+				for (let i = 0; i < targetOffset && i < children.length; i += 1) {
+					offset += rawLength(children[i]);
+				}
+				found = true;
+				return;
+			}
+		}
+		if (node.nodeType === Node.TEXT_NODE) {
+			offset += node.textContent?.length ?? 0;
+			return;
+		}
+		if (node.nodeType !== Node.ELEMENT_NODE) {
+			return;
+		}
+		const el = node as HTMLElement;
+		if (el.classList.contains("graph-search-chip")) {
+			if (el.contains(targetNode)) {
+				offset += rawOffsetWithinChip(el, targetNode, targetOffset);
+				found = true;
+				return;
+			}
+			offset += chipRawLength(el);
+			return;
+		}
+		el.childNodes.forEach((child) => walk(child));
+	};
+	root.childNodes.forEach((child) => walk(child));
+	return offset;
+}
+
+function rawOffsetWithinChip(
+	chip: HTMLElement,
+	targetNode: Node,
+	targetOffset: number,
+): number {
+	const parts = getChipParts(chip);
+	const valueEl = chip.querySelector(
+		".graph-search-chip-value",
+	) as HTMLElement | null;
+	if (!valueEl) {
+		return parts.prefix.length;
+	}
+	let valueOffset = 0;
+	let found = false;
+	const walkValue = (node: Node) => {
+		if (found) {
+			return;
+		}
+		if (node === targetNode) {
+			if (node.nodeType === Node.TEXT_NODE) {
+				valueOffset += targetOffset;
+				found = true;
+				return;
+			}
+			if (node.nodeType === Node.ELEMENT_NODE) {
+				const children = Array.from(node.childNodes);
+				for (let i = 0; i < targetOffset && i < children.length; i += 1) {
+					valueOffset += rawLength(children[i]);
+				}
+				found = true;
+				return;
+			}
+		}
+		if (node.nodeType === Node.TEXT_NODE) {
+			valueOffset += node.textContent?.length ?? 0;
+			return;
+		}
+		if (node.nodeType !== Node.ELEMENT_NODE) {
+			return;
+		}
+		node.childNodes.forEach((child) => walkValue(child));
+	};
+	valueEl.childNodes.forEach((child) => walkValue(child));
+	if (!found) {
+		valueOffset = parts.value.length;
+	}
+	return parts.prefix.length + Math.min(valueOffset, parts.value.length);
+}
+
+function rawLength(node: Node): number {
+	if (node.nodeType === Node.TEXT_NODE) {
+		return node.textContent?.length ?? 0;
+	}
+	if (node.nodeType !== Node.ELEMENT_NODE) {
+		return 0;
+	}
+	const el = node as HTMLElement;
+	if (el.classList.contains("graph-search-chip")) {
+		return chipRawLength(el);
+	}
+	let length = 0;
+	el.childNodes.forEach((child) => {
+		length += rawLength(child);
+	});
+	return length;
+}
+
+function chipRawLength(chip: HTMLElement): number {
+	const parts = getChipParts(chip);
+	return parts.prefix.length + parts.value.length + parts.suffix.length;
+}
+
+function getChipParts(chip: HTMLElement): {
+	prefix: string;
+	value: string;
+	suffix: string;
+} {
+	const prefix = chip.dataset.rawPrefix ?? "";
+	const suffix = chip.dataset.rawSuffix ?? "";
+	const valueEl = chip.querySelector(
+		".graph-search-chip-value",
+	) as HTMLElement | null;
+	const value = valueEl?.textContent ?? "";
+	return { prefix, value, suffix };
+}
+
+function findNodeAtRawOffset(
+	root: HTMLElement,
+	rawOffset: number,
+): { node: Node; offset: number } | null {
+	let remaining = rawOffset;
+	let result: { node: Node; offset: number } | null = null;
+	const walk = (node: Node) => {
+		if (result) {
+			return;
+		}
+		if (node.nodeType === Node.TEXT_NODE) {
+			const length = node.textContent?.length ?? 0;
+			if (remaining <= length) {
+				result = { node, offset: remaining };
+				return;
+			}
+			remaining -= length;
+			return;
+		}
+		if (node.nodeType !== Node.ELEMENT_NODE) {
+			return;
+		}
+		const el = node as HTMLElement;
+		if (el.classList.contains("graph-search-chip")) {
+			const parts = getChipParts(el);
+			const prefixLen = parts.prefix.length;
+			const valueLen = parts.value.length;
+			const totalLen = prefixLen + valueLen + parts.suffix.length;
+			if (remaining === 0) {
+				const parent = el.parentNode;
+				if (parent) {
+					const index = Array.from(parent.childNodes).indexOf(el);
+					result = { node: parent, offset: Math.max(index, 0) };
+					return;
+				}
+			}
+			if (remaining <= totalLen) {
+				const parent = el.parentNode;
+				if (parent) {
+					const index = Array.from(parent.childNodes).indexOf(el);
+					result = { node: parent, offset: Math.max(index + 1, 0) };
+					return;
+				}
+			}
+			remaining -= totalLen;
+			return;
+		}
+		el.childNodes.forEach((child) => walk(child));
+	};
+	root.childNodes.forEach((child) => walk(child));
+	return result;
+}
+
+function findEndPosition(node: Node): { node: Node; offset: number } {
+	if (node.nodeType === Node.TEXT_NODE) {
+		return { node, offset: node.textContent?.length ?? 0 };
+	}
+	if (node.nodeType !== Node.ELEMENT_NODE) {
+		return { node, offset: 0 };
+	}
+	const el = node as HTMLElement;
+	if (el.classList.contains("graph-search-chip")) {
+		const valueEl = el.querySelector(
+			".graph-search-chip-value",
+		) as HTMLElement | null;
+		const targetNode = valueEl?.firstChild ?? valueEl ?? el;
+		return { node: targetNode, offset: valueEl?.textContent?.length ?? 0 };
+	}
+	if (el.childNodes.length === 0) {
+		return { node: el, offset: 0 };
+	}
+	return findEndPosition(el.childNodes[el.childNodes.length - 1]);
 }
