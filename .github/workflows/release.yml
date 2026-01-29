@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build plugin
+        run: yarn build
+
+      - name: Prepare release bundle
+        run: |
+          rm -rf release
+          mkdir -p release/graph-search
+          cp main.js manifest.json styles.css release/graph-search/
+          zip -r "release/graph-search-${GITHUB_REF_NAME}.zip" release/graph-search
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            main.js
+            manifest.json
+            styles.css
+            release/graph-search-${{ github.ref_name }}.zip
