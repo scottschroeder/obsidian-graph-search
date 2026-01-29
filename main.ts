@@ -1,9 +1,5 @@
 import {
 	App,
-	Editor,
-	MarkdownView,
-	Modal,
-	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
@@ -13,12 +9,9 @@ import {
 import * as plugin from "./pkg/obsidian_rust_plugin";
 import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
 
-import { GraphDistancesModal } from "./src/ui/distances-modal";
 import { GraphQueryModal } from "./src/ui/query-modal";
-import { openTitlePicker } from "./src/ui/title-suggest";
 import type {
 	CandidateInput,
-	DistanceEntry,
 	GraphStats,
 	SearchDocumentInput,
 	SearchStats,
@@ -58,89 +51,6 @@ export default class GraphSearchPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon(
-			"dice",
-			"Graph Search",
-			(evt: MouseEvent) => {
-				// Called when the user clicks the icon.
-				new Notice("This is a notice!");
-			},
-		);
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass("my-plugin-ribbon-class");
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText("Status Bar Text");
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: "open-graph-search-modal-simple",
-			name: "Open graph search modal (simple)",
-			callback: () => {
-				new GraphSearchModal(this.app).open();
-			},
-		});
-		this.addCommand({
-			id: "graph-search-build-graph",
-			name: "Build graph index",
-			callback: async () => {
-				const stats = await this.buildGraphIndex();
-				new Notice(
-					`Graph indexed: ${stats.node_count} nodes, ${stats.edge_count} edges`,
-				);
-			},
-		});
-		this.addCommand({
-			id: "graph-search-dump-debug",
-			name: "Dump graph debug",
-			callback: async () => {
-				try {
-					await this.buildGraphIndex();
-					const dump = plugin.graph_debug_dump() as string;
-					const path = "graph-search-debug.json";
-					await this.app.vault.adapter.write(path, dump);
-					new Notice(`Wrote debug dump to ${path}`);
-				} catch (error) {
-					console.error("Graph debug dump failed", error);
-					new Notice("Graph debug dump failed; see console");
-				}
-			},
-		});
-		this.addCommand({
-			id: "graph-search-show-distances",
-			name: "Distances from title",
-			callback: async () => {
-				openTitlePicker(this.app, async (input) => {
-					try {
-						const title = normalizeTitleInput(input);
-
-						await this.buildGraphIndex();
-						const entries =
-							(await plugin.graph_distances_from_title(
-								title,
-							)) as DistanceEntry[];
-						const hasSource = entries.some(
-							(entry) => entry.distance === 0,
-						);
-						if (!hasSource) {
-							new Notice(`No match found for: ${title}`);
-							return;
-						}
-						new GraphDistancesModal(
-							this.app,
-							title,
-							entries,
-						).open();
-					} catch (error) {
-						console.error("Graph distance lookup failed", error);
-						new Notice("Graph distance lookup failed; see console");
-					}
-				});
-			},
-		});
 		this.addCommand({
 			id: "graph-search-query",
 			name: "Graph query",
@@ -148,49 +58,9 @@ export default class GraphSearchPlugin extends Plugin {
 				new GraphQueryModal(this.app, this).open();
 			},
 		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: "graph-search-editor-command",
-			name: "Graph search editor command",
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection("Graph Search Editor Command");
-			},
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: "open-graph-search-modal-complex",
-			name: "Open graph search modal (complex)",
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView =
-					this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new GraphSearchModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			},
-		});
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new GraphSearchSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, "click", (evt: MouseEvent) => {
-			console.log("click", evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(
-			window.setInterval(() => console.log("setInterval"), 5 * 60 * 1000),
-		);
 
 		// here's the Rust bit
 		await plugin.default({ module_or_path: Promise.resolve(wasmBinary) });
@@ -302,15 +172,6 @@ export default class GraphSearchPlugin extends Plugin {
 		}));
 	}
 }
-
-function normalizeTitleInput(value: string): string {
-	let normalized = value.trim();
-	if (!normalized.includes("/") && normalized.toLowerCase().endsWith(".md")) {
-		normalized = normalized.slice(0, -3);
-	}
-	return normalized;
-}
-
 function collectFileTags(app: App, file: TFile): string[] {
 	const cache = app.metadataCache.getFileCache(file);
 	const inlineTags = cache?.tags?.map((tag) => tag.tag) ?? [];
@@ -339,22 +200,6 @@ function splitTagString(value: string): string[] {
 		return value.split(",");
 	}
 	return value.split(/\s+/);
-}
-
-class GraphSearchModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.setText("Woah!");
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
 }
 
 class GraphSearchSettingTab extends PluginSettingTab {
