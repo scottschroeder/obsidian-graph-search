@@ -279,9 +279,6 @@ fn parse_path_term(term: &str) -> Option<String> {
     if term.starts_with("path:") {
         return Some(term.trim_start_matches("path:").to_string());
     }
-    if term.starts_with("file:") {
-        return Some(term.trim_start_matches("file:").to_string());
-    }
     None
 }
 

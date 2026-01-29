@@ -1,6 +1,6 @@
 {
 	"name": "graph-search",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Graph-aware Obsidian search with proximity scoring.",
 	"version": "1.0.0",
 	"main": "main.js",
 	"scripts": {

@@ -214,8 +214,7 @@ impl GraphStore {
 
             if !missing {
                 let effective_distance = if total <= 1 { 0 } else { total - 1 };
-                let distance_score =
-                    1.0 / (1.0 + weights.distance_falloff * effective_distance as f32);
+                let distance_score = (-weights.distance_falloff * effective_distance as f32).exp();
                 let total_score = weights.distance_weight * distance_score
                     + weights.title_weight * candidate.title_score
                     + weights.body_weight * candidate.body_score;
@@ -385,5 +384,76 @@ mod tests {
             entries.first().map(|entry| entry.path.as_str()),
             Some("folder/alpha.md")
         );
+    }
+
+    #[test]
+    fn distance_score_equal_for_zero_and_one() {
+        let mut store = GraphStore::new();
+        let nodes = vec![
+            NodeInput {
+                title: "alpha".to_string(),
+                path: "alpha.md".to_string(),
+            },
+            NodeInput {
+                title: "beta".to_string(),
+                path: "beta.md".to_string(),
+            },
+            NodeInput {
+                title: "gamma".to_string(),
+                path: "gamma.md".to_string(),
+            },
+        ];
+        let edges = vec![
+            EdgeInput {
+                from: "alpha.md".to_string(),
+                to: "beta.md".to_string(),
+            },
+            EdgeInput {
+                from: "beta.md".to_string(),
+                to: "gamma.md".to_string(),
+            },
+        ];
+        store.build(nodes, edges);
+
+        let weights = ScoreWeights {
+            distance_weight: 1.0,
+            title_weight: 0.0,
+            body_weight: 0.0,
+            distance_falloff: 0.5,
+        };
+        let candidates = vec![
+            CandidateInput {
+                title: "alpha".to_string(),
+                path: "alpha.md".to_string(),
+                title_score: 0.0,
+                body_score: 0.0,
+            },
+            CandidateInput {
+                title: "beta".to_string(),
+                path: "beta.md".to_string(),
+                title_score: 0.0,
+                body_score: 0.0,
+            },
+            CandidateInput {
+                title: "gamma".to_string(),
+                path: "gamma.md".to_string(),
+                title_score: 0.0,
+                body_score: 0.0,
+            },
+        ];
+
+        let results = store.rank_candidates(vec!["alpha".to_string()], candidates, weights);
+        let by_path: HashMap<_, _> = results
+            .into_iter()
+            .map(|entry| (entry.path.clone(), entry))
+            .collect();
+
+        let alpha = by_path.get("alpha.md").unwrap();
+        let beta = by_path.get("beta.md").unwrap();
+        let gamma = by_path.get("gamma.md").unwrap();
+
+        assert!((alpha.distance_score - 1.0).abs() < 1e-6);
+        assert!((beta.distance_score - 1.0).abs() < 1e-6);
+        assert!(gamma.distance_score < 1.0);
     }
 }

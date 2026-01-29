@@ -50,9 +50,6 @@ export function extractSearchTerms(baseQuery: string): string[] {
 			if (term.startsWith("path:")) {
 				return term.slice(5);
 			}
-			if (term.startsWith("file:")) {
-				return term.slice(5);
-			}
 			return term;
 		})
 		.filter((term) => term.length > 0);
@@ -69,9 +66,6 @@ export function extractBodyTerms(baseQuery: string): string[] {
 				return false;
 			}
 			if (lowered.startsWith("path:")) {
-				return false;
-			}
-			if (lowered.startsWith("file:")) {
 				return false;
 			}
 			if (lowered.startsWith("#")) {

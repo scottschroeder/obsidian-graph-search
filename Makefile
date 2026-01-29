@@ -26,9 +26,6 @@ deps:
 build: preflight
 	$(YARN) run build
 
-dev: preflight
-	$(YARN) run dev
-
 install: build
 	mkdir -p $(PLUGIN_DIR)
 	cp main.js manifest.json styles.css $(PLUGIN_DIR)/
