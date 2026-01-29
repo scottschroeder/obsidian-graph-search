@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
-use petgraph::graph::{Graph, NodeIndex};
-use petgraph::visit::EdgeRef;
+use petgraph::{
+    graph::{Graph, NodeIndex},
+    visit::EdgeRef,
+};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use super::algo::bfs_multi_source;
-use super::model::{EdgeInput, NodeData, NodeInput};
+use super::{
+    algo::bfs_multi_source,
+    model::{EdgeInput, NodeData, NodeInput},
+};
 
 #[derive(Debug, Serialize)]
 pub struct GraphStats {
@@ -213,7 +217,7 @@ impl GraphStore {
             }
 
             if !missing {
-                let effective_distance = if total <= 1 { 0 } else { total - 1 };
+                let effective_distance = total.saturating_sub(1);
                 let distance_score = (-weights.distance_falloff * effective_distance as f32).exp();
                 let total_score = weights.distance_weight * distance_score
                     + weights.title_weight * candidate.title_score

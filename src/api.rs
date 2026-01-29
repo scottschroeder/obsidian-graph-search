@@ -3,11 +3,15 @@ use std::cell::RefCell;
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
-use crate::graph::model::{EdgeInput, NodeInput};
-use crate::graph::store::{DistanceEntry, GraphStore, ScoreWeights, ScoredCandidate};
-use crate::models::CandidateInput;
-use crate::query;
-use crate::search::{SearchDocumentInput, SearchStore};
+use crate::{
+    graph::{
+        model::{EdgeInput, NodeInput},
+        store::{DistanceEntry, GraphStore, ScoreWeights, ScoredCandidate},
+    },
+    models::CandidateInput,
+    query,
+    search::{SearchDocumentInput, SearchStore},
+};
 
 thread_local! {
     static GRAPH: RefCell<GraphStore> = RefCell::new(GraphStore::new());

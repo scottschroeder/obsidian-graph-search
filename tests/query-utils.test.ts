@@ -18,7 +18,7 @@ describe("query utils", () => {
 	});
 
 	it("builds editable html with chips", () => {
-		const html = buildEditableHtml("near:\"My Note\"", [
+		const html = buildEditableHtml('near:"My Note"', [
 			{ start: 6, end: 13, text: "My Note", prefix: "near:" },
 		]);
 		expect(html).toContain("graph-search-chip");
@@ -46,7 +46,7 @@ describe("query utils", () => {
 		document.body.appendChild(div);
 		restoreCaretOffset(div, 8);
 		const caret = getCaretOffset(div);
-		expect(caret).toBe("near:\"My Note\"".length);
+		expect(caret).toBe('near:"My Note"'.length);
 		document.body.removeChild(div);
 	});
 

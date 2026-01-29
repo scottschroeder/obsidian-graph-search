@@ -2,9 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::models::CandidateInput;
-
 use super::tokenize::tokenize;
+use crate::models::CandidateInput;
 
 #[derive(Debug, Deserialize)]
 pub struct SearchDocumentInput {

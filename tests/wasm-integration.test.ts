@@ -20,7 +20,7 @@ describe("wasm integration", () => {
 		const parsed = wasm.parse_query("budget near:alpha");
 		expect(parsed.near_titles).toEqual(["alpha"]);
 		const layout = wasm.parse_query_layout(
-			"near:\"alpha beta\" tag:#meeting",
+			'near:"alpha beta" tag:#meeting',
 		);
 		expect(layout.spans.length).toBe(2);
 		const prefixes = layout.spans.map((span: any) => span.prefix).sort();
@@ -58,8 +58,18 @@ describe("wasm integration", () => {
 		const ranked = wasm.graph_rank_candidates(
 			["alpha"],
 			[
-				{ title: "alpha", path: "alpha.md", title_score: 0, body_score: 0 },
-				{ title: "beta", path: "beta.md", title_score: 0, body_score: 0 },
+				{
+					title: "alpha",
+					path: "alpha.md",
+					title_score: 0,
+					body_score: 0,
+				},
+				{
+					title: "beta",
+					path: "beta.md",
+					title_score: 0,
+					body_score: 0,
+				},
 			],
 			{
 				distance_weight: 1,

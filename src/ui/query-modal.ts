@@ -116,7 +116,8 @@ export class GraphQueryModal extends Modal {
 				return;
 			}
 			const raw = extractRawFromEditable(this.inputEl as HTMLElement);
-			const caret = getCaretOffset(this.inputEl as HTMLElement) ?? raw.length;
+			const caret =
+				getCaretOffset(this.inputEl as HTMLElement) ?? raw.length;
 			this.rawQuery = raw;
 			this.updateLayout();
 			this.renderEditable(caret);
@@ -280,13 +281,19 @@ export class GraphQueryModal extends Modal {
 			const body = this.plugin.getSearchContent(entry.path);
 			const snippet = buildSnippet(body, this.lastSearchTerms);
 			if (snippet) {
-				const snippetEl = item.createDiv({ cls: "graph-search-snippet" });
+				const snippetEl = item.createDiv({
+					cls: "graph-search-snippet",
+				});
 				snippetEl.innerHTML = snippet;
 				if (showDebug && weights) {
-					const weightedDistance = entry.distance_score * weights.distance_weight;
-					const weightedTitle = entry.title_score * weights.title_weight;
+					const weightedDistance =
+						entry.distance_score * weights.distance_weight;
+					const weightedTitle =
+						entry.title_score * weights.title_weight;
 					const weightedBody = entry.body_score * weights.body_weight;
-					const debugRow = item.createDiv({ cls: "graph-search-snippet" });
+					const debugRow = item.createDiv({
+						cls: "graph-search-snippet",
+					});
 					debugRow.setText(
 						`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
 					);
@@ -407,7 +414,10 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private openSelectedResult() {
-		if (this.selectedIndex < 0 || this.selectedIndex >= this.results.length) {
+		if (
+			this.selectedIndex < 0 ||
+			this.selectedIndex >= this.results.length
+		) {
 			return;
 		}
 		const entry = this.results[this.selectedIndex];

@@ -118,9 +118,10 @@ export default class GraphSearchPlugin extends Plugin {
 						const title = normalizeTitleInput(input);
 
 						await this.buildGraphIndex();
-						const entries = (await plugin.graph_distances_from_title(
-							title,
-						)) as DistanceEntry[];
+						const entries =
+							(await plugin.graph_distances_from_title(
+								title,
+							)) as DistanceEntry[];
 						const hasSource = entries.some(
 							(entry) => entry.distance === 0,
 						);
@@ -128,7 +129,11 @@ export default class GraphSearchPlugin extends Plugin {
 							new Notice(`No match found for: ${title}`);
 							return;
 						}
-						new GraphDistancesModal(this.app, title, entries).open();
+						new GraphDistancesModal(
+							this.app,
+							title,
+							entries,
+						).open();
 					} catch (error) {
 						console.error("Graph distance lookup failed", error);
 						new Notice("Graph distance lookup failed; see console");
@@ -351,7 +356,6 @@ class GraphSearchModal extends Modal {
 		contentEl.empty();
 	}
 }
-
 
 class GraphSearchSettingTab extends PluginSettingTab {
 	plugin: GraphSearchPlugin;

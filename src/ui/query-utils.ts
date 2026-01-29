@@ -210,9 +210,7 @@ export function findSpanAtCursor(
 	cursor: number,
 ): ChipSpan | null {
 	return (
-		spans.find(
-			(span) => cursor >= span.start && cursor <= span.end,
-		) ?? null
+		spans.find((span) => cursor >= span.start && cursor <= span.end) ?? null
 	);
 }
 
@@ -333,7 +331,11 @@ function computeRawOffset(
 			}
 			if (node.nodeType === Node.ELEMENT_NODE) {
 				const children = Array.from(node.childNodes);
-				for (let i = 0; i < targetOffset && i < children.length; i += 1) {
+				for (
+					let i = 0;
+					i < targetOffset && i < children.length;
+					i += 1
+				) {
 					offset += rawLength(children[i]);
 				}
 				found = true;
@@ -389,7 +391,11 @@ function rawOffsetWithinChip(
 			}
 			if (node.nodeType === Node.ELEMENT_NODE) {
 				const children = Array.from(node.childNodes);
-				for (let i = 0; i < targetOffset && i < children.length; i += 1) {
+				for (
+					let i = 0;
+					i < targetOffset && i < children.length;
+					i += 1
+				) {
 					valueOffset += rawLength(children[i]);
 				}
 				found = true;
@@ -480,7 +486,10 @@ function findNodeAtRawOffset(
 			if (remaining === 0) {
 				const prev = el.previousSibling;
 				if (prev && prev.nodeType === Node.TEXT_NODE) {
-					result = { node: prev, offset: prev.textContent?.length ?? 0 };
+					result = {
+						node: prev,
+						offset: prev.textContent?.length ?? 0,
+					};
 					return;
 				}
 				const parent = el.parentNode;

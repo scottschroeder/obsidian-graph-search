@@ -54,9 +54,11 @@ class TagSuggestModal extends FuzzySuggestModal<TagItem> {
 }
 
 function buildTagItems(app: App): TagItem[] {
-	const tags = (app.metadataCache as {
-		getTags?: () => Record<string, number>;
-	}).getTags?.();
+	const tags = (
+		app.metadataCache as {
+			getTags?: () => Record<string, number>;
+		}
+	).getTags?.();
 	const entries = Object.entries(tags ?? {}) as [string, number][];
 	entries.sort((a, b) => {
 		const countDiff = b[1] - a[1];

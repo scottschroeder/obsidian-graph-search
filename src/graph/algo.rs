@@ -1,7 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 
-use petgraph::graph::{Graph, NodeIndex};
-use petgraph::visit::EdgeRef;
+use petgraph::{
+    graph::{Graph, NodeIndex},
+    visit::EdgeRef,
+};
 
 use super::model::NodeData;
 
@@ -22,16 +24,16 @@ pub fn bfs_multi_source(
         let next_distance = distances[&current] + 1;
         for edge in graph.edges(current) {
             let neighbor = edge.target();
-            if !distances.contains_key(&neighbor) {
-                distances.insert(neighbor, next_distance);
+            if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor) {
+                e.insert(next_distance);
                 queue.push_back(neighbor);
             }
         }
 
         for edge in graph.edges_directed(current, petgraph::Direction::Incoming) {
             let neighbor = edge.source();
-            if !distances.contains_key(&neighbor) {
-                distances.insert(neighbor, next_distance);
+            if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor) {
+                e.insert(next_distance);
                 queue.push_back(neighbor);
             }
         }
@@ -42,8 +44,9 @@ pub fn bfs_multi_source(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use petgraph::graph::Graph;
+
+    use super::*;
 
     fn node(title: &str) -> NodeData {
         NodeData {
