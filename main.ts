@@ -8,6 +8,7 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TFile,
 } from "obsidian";
 
 import * as plugin from "./pkg/obsidian_rust_plugin";
@@ -355,13 +356,19 @@ class GraphQueryModal extends Modal {
 	private resultsEl?: HTMLDivElement;
 	private statusEl?: HTMLDivElement;
 	private isSuggesting = false;
+	private results: ScoredCandidate[] = [];
+	private selectedIndex = -1;
+	private debounceHandle?: number;
+	private graphReady = false;
+	private lastCandidateCount = 0;
+	private lastNearTitles: string[] = [];
 
 	constructor(app: App, plugin: GraphSearchPlugin) {
 		super(app);
 		this.plugin = plugin;
 	}
 
-	onOpen() {
+		onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.createEl("h2", { text: "Graph query" });
@@ -376,18 +383,37 @@ class GraphQueryModal extends Modal {
 
 		this.inputEl.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
-				this.runQuery();
+				event.preventDefault();
+				this.openSelectedResult();
+				return;
+			}
+			if (event.key === "ArrowDown") {
+				event.preventDefault();
+				this.moveSelection(1);
+				return;
+			}
+			if (event.key === "ArrowUp") {
+				event.preventDefault();
+				this.moveSelection(-1);
+				return;
+			}
+			if (event.key === "Escape") {
+				this.close();
 			}
 		});
 
 		this.inputEl.addEventListener("input", () => {
 			this.maybeSuggestNear();
+			this.scheduleQuery();
 		});
 
 		this.inputEl.focus();
 	}
 
-	onClose() {
+		onClose() {
+		if (this.debounceHandle) {
+			window.clearTimeout(this.debounceHandle);
+		}
 		this.contentEl.empty();
 	}
 
@@ -426,6 +452,7 @@ class GraphQueryModal extends Modal {
 				this.inputEl.setSelectionRange(newCursor, newCursor);
 				this.inputEl.focus();
 				this.isSuggesting = false;
+				this.scheduleQuery();
 			},
 			() => {
 				this.isSuggesting = false;
@@ -439,12 +466,19 @@ class GraphQueryModal extends Modal {
 		}
 		const rawQuery = this.inputEl.value.trim();
 		if (!rawQuery) {
-			new Notice("Enter a query first");
+			this.results = [];
+			this.selectedIndex = -1;
+			this.lastCandidateCount = 0;
+			this.lastNearTitles = [];
+			this.renderResults([], 0, []);
 			return;
 		}
 
 		try {
-			await this.plugin.buildGraphIndex();
+			if (!this.graphReady) {
+				await this.plugin.buildGraphIndex();
+				this.graphReady = true;
+			}
 			const parsed = plugin.parse_query(rawQuery) as ParsedQuery;
 			const candidates = await this.plugin.getCandidates(parsed.base_query);
 			const scored = (await plugin.graph_rank_candidates(
@@ -452,11 +486,24 @@ class GraphQueryModal extends Modal {
 				candidates,
 			)) as ScoredCandidate[];
 
+			this.results = scored;
+			this.selectedIndex = scored.length > 0 ? 0 : -1;
+			this.lastCandidateCount = candidates.length;
+			this.lastNearTitles = parsed.near_titles;
 			this.renderResults(scored, candidates.length, parsed.near_titles);
 		} catch (error) {
 			console.error("Graph query failed", error);
 			new Notice("Graph query failed; see console");
 		}
+	}
+
+	private scheduleQuery() {
+		if (this.debounceHandle) {
+			window.clearTimeout(this.debounceHandle);
+		}
+		this.debounceHandle = window.setTimeout(() => {
+			this.runQuery();
+		}, 200);
 	}
 
 	private renderResults(
@@ -479,11 +526,63 @@ class GraphQueryModal extends Modal {
 		}
 
 		const list = this.resultsEl.createEl("ol");
-		results.slice(0, 50).forEach((entry) => {
-			list.createEl("li", {
+		results.slice(0, 50).forEach((entry, index) => {
+			const item = list.createEl("li", {
 				text: `${entry.distance_sum} - ${entry.title} (${entry.path})`,
 			});
+			if (index === this.selectedIndex) {
+				item.addClass("is-selected");
+			}
+			item.addEventListener("click", () => {
+				this.selectedIndex = index;
+				this.openSelectedResult();
+			});
 		});
+		const selected = list.querySelector("li.is-selected");
+		if (selected instanceof HTMLElement) {
+			selected.scrollIntoView({ block: "nearest" });
+		}
+	}
+
+	private moveSelection(delta: number) {
+		if (this.results.length === 0) {
+			return;
+		}
+		const maxIndex = this.results.length - 1;
+		if (this.selectedIndex < 0) {
+			this.selectedIndex = 0;
+		} else {
+			let next = this.selectedIndex + delta;
+			if (next > maxIndex) {
+				next = 0;
+			} else if (next < 0) {
+				next = maxIndex;
+			}
+			this.selectedIndex = next;
+		}
+		this.renderResults(
+			this.results,
+			this.lastCandidateCount,
+			this.lastNearTitles,
+		);
+	}
+
+	private openSelectedResult() {
+		if (this.selectedIndex < 0 || this.selectedIndex >= this.results.length) {
+			return;
+		}
+		const entry = this.results[this.selectedIndex];
+		openFileByPath(this.app, entry.path);
+		this.close();
+	}
+}
+
+function openFileByPath(app: App, path: string) {
+	const file = app.vault.getAbstractFileByPath(path);
+	if (file instanceof TFile) {
+		app.workspace.getLeaf().openFile(file);
+	} else {
+		new Notice(`File not found: ${path}`);
 	}
 }
 

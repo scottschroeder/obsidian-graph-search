@@ -6,3 +6,38 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+.graph-search-results {
+	max-height: 45vh;
+	overflow: auto;
+	margin-top: 0.5rem;
+}
+
+.graph-search-results ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.graph-search-results li {
+	padding: 0.4rem 0.6rem;
+	cursor: pointer;
+}
+
+.graph-search-results li:nth-child(odd) {
+	background: var(--background-secondary);
+}
+
+.graph-search-results li:nth-child(even) {
+	background: var(--background-secondary-alt);
+}
+
+.graph-search-results li.is-selected,
+.graph-search-results li:hover {
+	background: var(--background-modifier-hover);
+	border-left: 4px solid var(--interactive-accent);
+	font-weight: 600;
+}
