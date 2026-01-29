@@ -4,11 +4,14 @@ use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
 use crate::graph::model::{EdgeInput, NodeInput};
-use crate::graph::store::{CandidateInput, DistanceEntry, GraphStore, ScoredCandidate};
+use crate::graph::store::{DistanceEntry, GraphStore, ScoredCandidate};
+use crate::models::CandidateInput;
 use crate::query;
+use crate::search::{SearchDocumentInput, SearchStore};
 
 thread_local! {
     static GRAPH: RefCell<GraphStore> = RefCell::new(GraphStore::new());
+    static SEARCH: RefCell<SearchStore> = RefCell::new(SearchStore::new());
 }
 
 #[wasm_bindgen]
@@ -55,4 +58,17 @@ pub fn graph_rank_candidates(
 pub fn graph_debug_dump() -> Result<JsValue, JsValue> {
     let dump = GRAPH.with(|store| store.borrow().debug_dump(200, 200));
     Ok(JsValue::from_str(&dump))
+}
+
+#[wasm_bindgen]
+pub fn search_index(docs: JsValue) -> Result<JsValue, JsValue> {
+    let docs: Vec<SearchDocumentInput> = swb::from_value(docs)?;
+    let stats = SEARCH.with(|store| store.borrow_mut().build(docs));
+    swb::to_value(&stats).map_err(|err| err.into())
+}
+
+#[wasm_bindgen]
+pub fn search_candidates(base_query: String) -> Result<JsValue, JsValue> {
+    let results: Vec<CandidateInput> = SEARCH.with(|store| store.borrow().search(&base_query));
+    swb::to_value(&results).map_err(|err| err.into())
 }

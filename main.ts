@@ -51,6 +51,17 @@ type ScoredCandidate = {
 	distance_sum: number;
 };
 
+type SearchDocumentInput = {
+	title: string;
+	path: string;
+	body: string;
+};
+
+type SearchStats = {
+	doc_count: number;
+	token_count: number;
+};
+
 type DistanceEntry = {
 	title: string;
 	path: string;
@@ -231,6 +242,20 @@ export default class GraphSearchPlugin extends Plugin {
 		return plugin.graph_init(nodes, edges) as GraphStats;
 	}
 
+	async buildSearchIndex(): Promise<SearchStats> {
+		const files = this.app.vault.getMarkdownFiles();
+		const docs: SearchDocumentInput[] = [];
+		for (const file of files) {
+			const body = await this.app.vault.cachedRead(file);
+			docs.push({
+				title: file.basename,
+				path: file.path,
+				body,
+			});
+		}
+		return plugin.search_index(docs) as SearchStats;
+	}
+
 	async getCandidates(baseQuery: string): Promise<CandidateInput[]> {
 		const files = this.app.vault.getMarkdownFiles();
 		const terms = baseQuery
@@ -360,6 +385,7 @@ class GraphQueryModal extends Modal {
 	private selectedIndex = -1;
 	private debounceHandle?: number;
 	private graphReady = false;
+	private searchReady = false;
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 
@@ -479,8 +505,14 @@ class GraphQueryModal extends Modal {
 				await this.plugin.buildGraphIndex();
 				this.graphReady = true;
 			}
+			if (!this.searchReady) {
+				await this.plugin.buildSearchIndex();
+				this.searchReady = true;
+			}
 			const parsed = plugin.parse_query(rawQuery) as ParsedQuery;
-			const candidates = await this.plugin.getCandidates(parsed.base_query);
+			const candidates = (await plugin.search_candidates(
+				parsed.base_query,
+			)) as CandidateInput[];
 			const scored = (await plugin.graph_rank_candidates(
 				parsed.near_titles,
 				candidates,

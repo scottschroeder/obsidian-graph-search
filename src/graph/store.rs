@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use petgraph::graph::{Graph, NodeIndex};
 use petgraph::visit::EdgeRef;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json;
 
 use super::algo::bfs_multi_source;
@@ -21,11 +21,7 @@ pub struct DistanceEntry {
     pub distance: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct CandidateInput {
-    pub title: String,
-    pub path: String,
-}
+use crate::models::CandidateInput;
 
 #[derive(Debug, Serialize)]
 pub struct ScoredCandidate {
