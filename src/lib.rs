@@ -31,7 +31,7 @@ impl ExampleCommand {
     }
 
     pub fn callback(&self) {
-        obsidian::Notice::new("hello from rust");
+        obsidian::Notice::new("hello from rust <3");
     }
 }
 
