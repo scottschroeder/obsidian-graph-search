@@ -74,6 +74,7 @@ const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 
 export default class GraphSearchPlugin extends Plugin {
 	settings: GraphSearchPluginSettings;
+	private searchContentByPath = new Map<string, string>();
 
 	async onload() {
 		await this.loadSettings();
@@ -245,6 +246,7 @@ export default class GraphSearchPlugin extends Plugin {
 	async buildSearchIndex(): Promise<SearchStats> {
 		const files = this.app.vault.getMarkdownFiles();
 		const docs: SearchDocumentInput[] = [];
+		this.searchContentByPath = new Map();
 		for (const file of files) {
 			const body = await this.app.vault.cachedRead(file);
 			docs.push({
@@ -252,8 +254,13 @@ export default class GraphSearchPlugin extends Plugin {
 				path: file.path,
 				body,
 			});
+			this.searchContentByPath.set(file.path, body);
 		}
 		return plugin.search_index(docs) as SearchStats;
+	}
+
+	getSearchContent(path: string): string {
+		return this.searchContentByPath.get(path) ?? "";
 	}
 
 	async getCandidates(baseQuery: string): Promise<CandidateInput[]> {
@@ -359,6 +366,85 @@ function formatNearValue(value: string): string {
 	return trimmed.includes(" ") ? `"${trimmed}"` : trimmed;
 }
 
+function extractSearchTerms(baseQuery: string): string[] {
+	return baseQuery
+		.split(/\s+/)
+		.map((term) => term.trim())
+		.filter((term) => term.length > 0)
+		.map((term) => {
+			if (term.startsWith("tag:")) {
+				return term.slice(4);
+			}
+			if (term.startsWith("path:")) {
+				return term.slice(5);
+			}
+			if (term.startsWith("file:")) {
+				return term.slice(5);
+			}
+			return term;
+		})
+		.filter((term) => term.length > 0);
+}
+
+function buildSnippet(body: string, terms: string[]): string {
+	if (!body) {
+		return "";
+	}
+	const cleaned = body.replace(/\s+/g, " ").trim();
+	if (!cleaned) {
+		return "";
+	}
+	const lowered = cleaned.toLowerCase();
+	let matchIndex = -1;
+	let matchLength = 0;
+	for (const term of terms) {
+		const normalized = term.replace(/^#/, "").toLowerCase();
+		if (!normalized) {
+			continue;
+		}
+		const index = lowered.indexOf(normalized);
+		if (index >= 0 && (matchIndex === -1 || index < matchIndex)) {
+			matchIndex = index;
+			matchLength = normalized.length;
+		}
+	}
+	const windowSize = 120;
+	let start = 0;
+	if (matchIndex >= 0) {
+		start = Math.max(0, matchIndex - Math.floor(windowSize / 2));
+	}
+	const snippet = cleaned.slice(start, start + windowSize);
+	return highlightSnippet(snippet, terms);
+}
+
+function highlightSnippet(snippet: string, terms: string[]): string {
+	let result = escapeHtml(snippet);
+	for (const term of terms) {
+		const normalized = term.replace(/^#/, "");
+		if (!normalized) {
+			continue;
+		}
+		const pattern = new RegExp(escapeRegExp(normalized), "gi");
+		result = result.replace(pattern, (match) => {
+			return `<span class="graph-search-highlight">${match}</span>`;
+		});
+	}
+	return result;
+}
+
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/\"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 class GraphSearchModal extends Modal {
 	constructor(app: App) {
 		super(app);
@@ -388,6 +474,7 @@ class GraphQueryModal extends Modal {
 	private searchReady = false;
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
+	private lastSearchTerms: string[] = [];
 
 	constructor(app: App, plugin: GraphSearchPlugin) {
 		super(app);
@@ -397,15 +484,18 @@ class GraphQueryModal extends Modal {
 		onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.createEl("h2", { text: "Graph query" });
+		this.modalEl.addClass("prompt");
 
 		this.inputEl = contentEl.createEl("input", {
 			type: "text",
 			placeholder: "budget tag:#meeting near:ExactFile",
+			cls: "graph-search-input prompt-input",
 		});
 
 		this.statusEl = contentEl.createDiv({ cls: "graph-search-status" });
-		this.resultsEl = contentEl.createDiv({ cls: "graph-search-results" });
+		this.resultsEl = contentEl.createDiv({
+			cls: "graph-search-results prompt-results",
+		});
 
 		this.inputEl.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
@@ -522,6 +612,7 @@ class GraphQueryModal extends Modal {
 			this.selectedIndex = scored.length > 0 ? 0 : -1;
 			this.lastCandidateCount = candidates.length;
 			this.lastNearTitles = parsed.near_titles;
+			this.lastSearchTerms = extractSearchTerms(parsed.base_query);
 			this.renderResults(scored, candidates.length, parsed.near_titles);
 		} catch (error) {
 			console.error("Graph query failed", error);
@@ -557,20 +648,31 @@ class GraphQueryModal extends Modal {
 			return;
 		}
 
-		const list = this.resultsEl.createEl("ol");
+		const list = this.resultsEl.createDiv();
 		results.slice(0, 50).forEach((entry, index) => {
-			const item = list.createEl("li", {
-				text: `${entry.distance_sum} - ${entry.title} (${entry.path})`,
-			});
+			const item = list.createDiv({ cls: "suggestion-item" });
+			item.addClass("graph-search-result");
 			if (index === this.selectedIndex) {
 				item.addClass("is-selected");
 			}
+			const titleRow = item.createDiv({ cls: "graph-search-title" });
+			titleRow.setText(entry.title);
+			const pathRow = item.createDiv({ cls: "graph-search-path" });
+			pathRow.setText(entry.path);
+
+			const body = this.plugin.getSearchContent(entry.path);
+			const snippet = buildSnippet(body, this.lastSearchTerms);
+			if (snippet) {
+				const snippetEl = item.createDiv({ cls: "graph-search-snippet" });
+				snippetEl.innerHTML = snippet;
+			}
+
 			item.addEventListener("click", () => {
 				this.selectedIndex = index;
 				this.openSelectedResult();
 			});
 		});
-		const selected = list.querySelector("li.is-selected");
+		const selected = list.querySelector(".is-selected");
 		if (selected instanceof HTMLElement) {
 			selected.scrollIntoView({ block: "nearest" });
 		}
