@@ -36,10 +36,11 @@ jobs:
 
       - name: Prepare release bundle
         run: |
-          rm -rf release
-          mkdir -p release/graph-search
-          cp main.js manifest.json styles.css release/graph-search/
-          zip -r "release/graph-search-${GITHUB_REF_NAME}.zip" release/graph-search
+          rm -rf .
+          mkdir -p graph-search
+          cp ../main.js ../manifest.json ../styles.css graph-search/
+          zip -r "graph-search-${GITHUB_REF_NAME}.zip" graph-search
+        working-directory: release
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
