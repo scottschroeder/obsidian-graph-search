@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal } from "obsidian";
 
-import { stripMdExtension } from "./query-utils";
+import { buildDanglingGraphInput, stripMdExtension } from "../link-utils";
 
 type NoteTitleItem = {
 	title: string;
@@ -65,7 +65,7 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 		counts.set(file.basename, (counts.get(file.basename) ?? 0) + 1);
 	});
 
-	return files.map((file) => {
+	const items = files.map((file) => {
 		const hasDuplicate = (counts.get(file.basename) ?? 0) > 1;
 		const value = hasDuplicate
 			? stripMdExtension(file.path)
@@ -80,4 +80,20 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 			label,
 		};
 	});
+
+	const dangling = buildDanglingGraphInput({
+		unresolvedLinks: app.metadataCache.unresolvedLinks,
+		existingPaths: files.map((file) => file.path),
+		existingTitles: files.map((file) => file.basename),
+	});
+	for (const node of dangling.nodes) {
+		items.push({
+			title: node.title,
+			path: node.title,
+			value: node.title,
+			label: `${node.title} (not created)`,
+		});
+	}
+
+	return items;
 }

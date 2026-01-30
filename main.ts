@@ -10,6 +10,11 @@ import type {
 	SearchDocumentInput,
 	SearchStats,
 } from "./src/ui/types";
+import {
+	buildDanglingGraphInput,
+	GraphEdgeInput,
+	GraphNodeInput,
+} from "./src/link-utils";
 
 // Remember to rename these classes and interfaces!
 
@@ -22,16 +27,6 @@ interface GraphSearchPluginSettings {
 	scoreDistanceCurve: string;
 	debugMode: boolean;
 }
-
-type GraphNodeInput = {
-	title: string;
-	path: string;
-};
-
-type GraphEdgeInput = {
-	from: string;
-	to: string;
-};
 
 const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 	scoreWeightDistance: 5.0,
@@ -107,6 +102,13 @@ export default class GraphSearchPlugin extends Plugin {
 				edges.push({ from: fromPath, to: toPath });
 			}
 		}
+		const dangling = buildDanglingGraphInput({
+			unresolvedLinks: this.app.metadataCache.unresolvedLinks,
+			existingPaths: files.map((file) => file.path),
+			existingTitles: files.map((file) => file.basename),
+		});
+		nodes.push(...dangling.nodes);
+		edges.push(...dangling.edges);
 
 		return plugin.graph_init(nodes, edges) as GraphStats;
 	}
