@@ -75,10 +75,7 @@ export class GraphQueryModal extends Modal {
 		});
 		this.inputEl.setAttribute("contenteditable", "true");
 		this.inputEl.setAttribute("spellcheck", "false");
-		this.inputEl.setAttribute(
-			"data-placeholder",
-			"budget tag:#meeting near:ExactFile",
-		);
+		this.inputEl.setAttribute("data-placeholder", "");
 
 		this.statusEl = contentEl.createDiv({ cls: "graph-search-status" });
 		this.resultsEl = contentEl.createDiv({
