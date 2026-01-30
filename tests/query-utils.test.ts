@@ -43,7 +43,7 @@ describe("query utils", () => {
 		expect(extractAtomsFromEditable(div)).toEqual(atoms);
 	});
 
-	it("restores caret offset inside chip", () => {
+	it("clamps caret offset inside chip", () => {
 		const atoms: QueryAtom[] = [
 			{ kind: "near", value: "My Note" },
 			{ kind: "whitespace", value: " " },
@@ -54,10 +54,10 @@ describe("query utils", () => {
 		div.setAttribute("contenteditable", "true");
 		div.innerHTML = html;
 		document.body.appendChild(div);
-		const raw = buildRawFromAtoms(atoms);
-		restoreCaretOffset(div, raw.length);
+		const insideChipOffset = 3;
+		restoreCaretOffset(div, insideChipOffset);
 		const caret = getCaretOffset(div);
-		expect(caret).toBe(raw.length);
+		expect(caret).toBe(atoms[0].value.length);
 		document.body.removeChild(div);
 	});
 

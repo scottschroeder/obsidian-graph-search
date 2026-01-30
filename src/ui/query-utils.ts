@@ -602,14 +602,19 @@ function findNodeAtRawOffset(
 				}
 			}
 			if (remaining <= totalLen) {
+				// If we're positioned within the chip's bounds, we should move to
+				// the appropriate text node after the chip
+				// But we need to position at the correct place for "and" text
 				const next = el.nextSibling;
 				if (next && next.nodeType === Node.TEXT_NODE) {
 					result = { node: next, offset: 0 };
 					return;
 				}
+				// If there's no text node after, we still want to position properly
 				const parent = el.parentNode;
 				if (parent) {
 					const index = Array.from(parent.childNodes).indexOf(el);
+					// Position after the chip in parent
 					result = { node: parent, offset: Math.max(index + 1, 0) };
 					return;
 				}
