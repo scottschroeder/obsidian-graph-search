@@ -9,7 +9,7 @@
 		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "tsc -noEmit -skipLibCheck",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
-		"test": "yarn run wasm && vitest run",
+		"test": "VITE_CJS_IGNORE_WARNING=1 yarn run wasm && VITE_CJS_IGNORE_WARNING=1 vitest run",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [],
