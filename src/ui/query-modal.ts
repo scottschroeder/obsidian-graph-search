@@ -282,19 +282,18 @@ export class GraphQueryModal extends Modal {
 					cls: "graph-search-snippet",
 				});
 				snippetEl.innerHTML = snippet;
-				if (showDebug && weights) {
-					const weightedDistance =
-						entry.distance_score * weights.distance_weight;
-					const weightedTitle =
-						entry.title_score * weights.title_weight;
-					const weightedBody = entry.body_score * weights.body_weight;
-					const debugRow = item.createDiv({
-						cls: "graph-search-snippet",
-					});
-					debugRow.setText(
-						`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
-					);
-				}
+			}
+			if (showDebug && weights) {
+				const weightedDistance =
+					entry.distance_score * weights.distance_weight;
+				const weightedTitle = entry.title_score * weights.title_weight;
+				const weightedBody = entry.body_score * weights.body_weight;
+				const debugRow = item.createDiv({
+					cls: "graph-search-snippet",
+				});
+				debugRow.setText(
+					`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
+				);
 			}
 
 			item.addEventListener("click", () => {
