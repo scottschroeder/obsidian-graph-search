@@ -5,31 +5,26 @@ import * as wasm from "../../pkg/obsidian_rust_plugin";
 import type {
 	CandidateInput,
 	ParsedQuery,
+	QueryAtom,
 	ScoredCandidate,
 	ScoreWeights,
 } from "./types";
-import type { ChipSpan } from "./query-utils";
 import {
-	buildEditableHtml,
+	buildEditableHtmlFromAtoms,
 	buildSnippet,
+	buildRawFromAtoms,
 	extractBodyTerms,
+	extractAtomsFromEditable,
 	extractRawFromEditable,
-	findTokenRange,
-	findSpanAtCursor,
-	findTokenAtCursor,
 	formatNearValue,
 	formatTagValue,
 	getCaretOffset,
 	isColonInsert,
-	removeRange,
 	restoreCaretOffset,
 } from "./query-utils";
+import { openFilterPicker } from "./filter-suggest";
 import { openTitlePicker } from "./title-suggest";
 import { openTagPicker } from "./tag-suggest";
-
-export type QueryLayout = {
-	spans: ChipSpan[];
-};
 
 type GraphSearchPluginApi = {
 	buildGraphIndex(): Promise<unknown>;
@@ -53,9 +48,11 @@ export class GraphQueryModal extends Modal {
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
-	private layout: QueryLayout = { spans: [] };
+	private atoms: QueryAtom[] = [];
 	private rawQuery = "";
 	private isRendering = false;
+	private pendingFilterHandle?: number;
+	private pendingFilterCaret?: number;
 
 	constructor(app: App, plugin: GraphSearchPluginApi) {
 		super(app);
@@ -115,15 +112,16 @@ export class GraphQueryModal extends Modal {
 			const raw = extractRawFromEditable(this.inputEl as HTMLElement);
 			const caret =
 				getCaretOffset(this.inputEl as HTMLElement) ?? raw.length;
-			this.rawQuery = raw;
-			this.updateLayout();
-			this.renderEditable(caret);
-			this.maybeSuggestChip(event, raw, caret);
-			this.scheduleQuery();
+			const atoms = extractAtomsFromEditable(this.inputEl as HTMLElement);
+			if (this.handleLiteralColon(event, raw, caret, atoms)) {
+				return;
+			}
+			this.cancelPendingFilter();
+			this.maybeScheduleFilter(event, raw, caret);
+			this.setAtoms(atoms, caret);
 		});
 
-		this.updateLayout();
-		this.renderEditable(0);
+		this.setAtoms([], 0);
 		this.inputEl.focus();
 	}
 
@@ -131,63 +129,100 @@ export class GraphQueryModal extends Modal {
 		if (this.debounceHandle) {
 			window.clearTimeout(this.debounceHandle);
 		}
+		this.cancelPendingFilter();
 		this.contentEl.empty();
 	}
 
-	private maybeSuggestChip(event: Event, raw: string, cursor: number) {
-		if (!this.inputEl || this.isSuggesting) {
+	private maybeSuggestChip(_event: Event, _raw: string, _cursor: number) {
+		return;
+	}
+
+	private maybeScheduleFilter(event: Event, raw: string, cursor: number) {
+		if (this.isSuggesting) {
 			return;
 		}
 		if (!isColonInsert(event)) {
 			return;
 		}
-		const tokenInfo = findTokenAtCursor(raw, cursor);
-		if (!tokenInfo) {
+		const insertIndex = cursor - 1;
+		if (insertIndex < 0) {
 			return;
 		}
-		if (tokenInfo.token.startsWith("near:")) {
-			const afterPrefix = tokenInfo.token.slice(5);
-			if (afterPrefix.length > 0) {
-				return;
-			}
-			this.isSuggesting = true;
-			openTitlePicker(
-				this.app,
-				(selected) => {
-					const formatted = formatNearValue(selected);
-					this.insertChipValue(raw, tokenInfo, "near:", formatted);
-				},
-				() => {
-					this.isSuggesting = false;
-				},
-			);
+		const before = insertIndex - 1;
+		if (before >= 0 && !/\s/.test(raw[before])) {
 			return;
 		}
-		if (tokenInfo.token.startsWith("tag:")) {
-			const afterPrefix = tokenInfo.token.slice(4);
-			if (afterPrefix.length > 0) {
-				return;
-			}
-			this.isSuggesting = true;
-			openTagPicker(
-				this.app,
-				(selected) => {
-					const formatted = formatTagValue(selected);
-					this.insertChipValue(raw, tokenInfo, "tag:", formatted);
-				},
-				() => {
-					this.isSuggesting = false;
-				},
-			);
+		this.pendingFilterCaret = cursor;
+		this.pendingFilterHandle = window.setTimeout(() => {
+			this.openFilterSuggest();
+		}, 150);
+	}
+
+	private openFilterSuggest() {
+		if (this.pendingFilterCaret === undefined || this.isSuggesting) {
+			return;
 		}
+		const caret = this.pendingFilterCaret;
+		this.pendingFilterCaret = undefined;
+		this.pendingFilterHandle = undefined;
+		this.isSuggesting = true;
+		openFilterPicker(
+			this.app,
+			(selected) => {
+				this.isSuggesting = false;
+				if (selected === "literal") {
+					return;
+				}
+				if (selected === "near") {
+					this.isSuggesting = true;
+					openTitlePicker(
+						this.app,
+						(value) => {
+							const formatted = formatNearValue(value);
+							this.insertChipAtCaret("near", formatted, caret);
+						},
+						() => {
+							this.isSuggesting = false;
+						},
+					);
+					return;
+				}
+				if (selected === "tag") {
+					this.isSuggesting = true;
+					openTagPicker(
+						this.app,
+						(value) => {
+							const formatted = formatTagValue(value);
+							this.insertChipAtCaret("tag", formatted, caret);
+						},
+						() => {
+							this.isSuggesting = false;
+						},
+					);
+					return;
+				}
+				if (selected === "path") {
+					const value = window.prompt("Path filter") ?? "";
+					if (value.trim()) {
+						this.insertChipAtCaret("path", value, caret);
+					}
+				}
+			},
+			() => {
+				this.isSuggesting = false;
+			},
+		);
 	}
 
 	private async runQuery() {
 		if (!this.resultsEl || !this.statusEl) {
 			return;
 		}
-		const rawQuery = this.rawQuery.trim();
-		if (!rawQuery) {
+		const hasTokens = this.atoms.some(
+			(atom) =>
+				atom.kind !== "whitespace" && atom.value.trim().length > 0,
+		);
+		if (!hasTokens) {
 			this.results = [];
 			this.selectedIndex = -1;
 			this.lastCandidateCount = 0;
@@ -205,7 +240,7 @@ export class GraphQueryModal extends Modal {
 				await this.plugin.buildSearchIndex();
 				this.searchReady = true;
 			}
-			const parsed = wasm.parse_query(rawQuery) as ParsedQuery;
+			const parsed = wasm.parse_query_atoms(this.atoms) as ParsedQuery;
 			const candidates = (await wasm.search_candidates(
 				parsed.base_query,
 			)) as CandidateInput[];
@@ -313,52 +348,241 @@ export class GraphQueryModal extends Modal {
 		}
 	}
 
-	private updateLayout() {
-		const raw = this.rawQuery;
-		try {
-			this.layout = wasm.parse_query_layout(raw) as QueryLayout;
-		} catch (error) {
-			console.error("Failed to parse query layout", error);
-			this.layout = { spans: [] };
-		}
-	}
-
 	private renderEditable(caretOffset?: number) {
 		if (!this.inputEl) {
 			return;
 		}
 		this.isRendering = true;
-		this.inputEl.innerHTML = buildEditableHtml(
-			this.rawQuery,
-			this.layout.spans,
-		);
-		const offset = caretOffset ?? this.rawQuery.length;
+		this.inputEl.innerHTML = buildEditableHtmlFromAtoms(this.atoms);
+		const offset = caretOffset ?? this.displayLength(this.atoms);
 		restoreCaretOffset(this.inputEl, offset);
 		this.isRendering = false;
 	}
 
-	private setRawQuery(raw: string, caretOffset?: number) {
-		this.rawQuery = raw;
-		this.updateLayout();
+	private setAtoms(atoms: QueryAtom[], caretOffset?: number) {
+		this.atoms = this.normalizeAtoms(atoms);
+		this.rawQuery = buildRawFromAtoms(this.atoms);
 		this.renderEditable(caretOffset);
 		this.scheduleQuery();
 		this.inputEl?.focus();
 	}
 
-	private insertChipValue(
-		raw: string,
-		tokenInfo: { start: number; end: number; token: string },
-		prefix: string,
+	private normalizeAtoms(atoms: QueryAtom[]): QueryAtom[] {
+		const normalized: QueryAtom[] = [];
+		for (const atom of atoms) {
+			if (atom.kind === "whitespace") {
+				if (normalized.length === 0) {
+					continue;
+				}
+				const last = normalized[normalized.length - 1];
+				if (last.kind === "whitespace") {
+					continue;
+				}
+				normalized.push({ kind: "whitespace", value: " " });
+				continue;
+			}
+			const trimmed = atom.value.trim();
+			if (!trimmed) {
+				continue;
+			}
+			const last = normalized[normalized.length - 1];
+			if (last && last.kind === "term" && atom.kind === "term") {
+				last.value += trimmed;
+				continue;
+			}
+			normalized.push({ kind: atom.kind, value: trimmed });
+		}
+		return normalized.filter((atom) => atom.value.length > 0);
+	}
+
+	private insertChipAtCaret(
+		kind: QueryAtom["kind"],
 		value: string,
+		caretOffset: number,
 	) {
-		const before = raw.slice(0, tokenInfo.start);
-		const after = raw.slice(tokenInfo.end);
-		const needsSpace = after.length === 0 || after[0] !== " ";
-		const replacement = `${prefix}${value}${needsSpace ? " " : ""}`;
-		const nextRaw = `${before}${replacement}${after}`;
-		const newCursor = before.length + replacement.length;
+		const cleanedValue = value.trim();
+		const removal = this.removeColonAtOffset(this.atoms, caretOffset - 1);
+		const adjustedOffset = removal.removed
+			? Math.max(0, caretOffset - 1)
+			: caretOffset;
+		const result = this.insertAtomAtOffset(
+			removal.atoms,
+			{ kind, value: cleanedValue },
+			adjustedOffset,
+		);
+		const updated = [...result.atoms];
+		const next = updated[result.index + 1];
+		if (!next || next.kind !== "whitespace") {
+			updated.splice(result.index + 1, 0, {
+				kind: "whitespace",
+				value: " ",
+			});
+			result.caretOffset += 1;
+		}
 		this.isSuggesting = false;
-		this.setRawQuery(nextRaw, newCursor);
+		this.setAtoms(updated, result.caretOffset);
+	}
+
+	private insertAtomAtOffset(
+		atoms: QueryAtom[],
+		atom: QueryAtom,
+		offset: number,
+	): { atoms: QueryAtom[]; caretOffset: number; index: number } {
+		const updated = [...atoms];
+		let cursor = 0;
+		for (let index = 0; index < updated.length; index += 1) {
+			const current = updated[index];
+			const length = current.value.length;
+			const end = cursor + length;
+			if (offset <= end) {
+				if (current.kind === "term") {
+					const relative = Math.max(0, offset - cursor);
+					if (relative <= 0) {
+						updated.splice(index, 0, atom);
+						return {
+							atoms: updated,
+							caretOffset:
+								this.offsetForAtom(updated, index) +
+								atom.value.length,
+							index,
+						};
+					}
+					if (relative >= length) {
+						updated.splice(index + 1, 0, atom);
+						return {
+							atoms: updated,
+							caretOffset:
+								this.offsetForAtom(updated, index + 1) +
+								atom.value.length,
+							index: index + 1,
+						};
+					}
+					const before = current.value.slice(0, relative).trim();
+					const after = current.value.slice(relative).trim();
+					const insertIndex = index + (before ? 1 : 0);
+					const replacement: QueryAtom[] = [];
+					if (before) {
+						replacement.push({ kind: "term", value: before });
+					}
+					replacement.push(atom);
+					if (after) {
+						replacement.push({ kind: "term", value: after });
+					}
+					updated.splice(index, 1, ...replacement);
+					return {
+						atoms: updated,
+						caretOffset:
+							this.offsetForAtom(updated, insertIndex) +
+							atom.value.length,
+						index: insertIndex,
+					};
+				}
+				const insertIndex = offset <= cursor ? index : index + 1;
+				updated.splice(insertIndex, 0, atom);
+				return {
+					atoms: updated,
+					caretOffset:
+						this.offsetForAtom(updated, insertIndex) +
+						atom.value.length,
+					index: insertIndex,
+				};
+			}
+			cursor = end;
+		}
+		updated.push(atom);
+		return {
+			atoms: updated,
+			caretOffset:
+				this.offsetForAtom(updated, updated.length - 1) +
+				atom.value.length,
+			index: updated.length - 1,
+		};
+	}
+
+	private offsetForAtom(atoms: QueryAtom[], index: number): number {
+		let offset = 0;
+		for (let i = 0; i < atoms.length; i += 1) {
+			if (i === index) {
+				return offset;
+			}
+			offset += atoms[i].value.length;
+		}
+		return offset;
+	}
+
+	private removeColonAtOffset(
+		atoms: QueryAtom[],
+		offset: number,
+	): { atoms: QueryAtom[]; removed: boolean } {
+		if (offset < 0) {
+			return { atoms, removed: false };
+		}
+		const updated = [...atoms];
+		let cursor = 0;
+		for (let index = 0; index < updated.length; index += 1) {
+			const current = updated[index];
+			const length = current.value.length;
+			if (offset >= cursor && offset < cursor + length) {
+				if (current.kind !== "term") {
+					return { atoms: updated, removed: false };
+				}
+				const relative = offset - cursor;
+				if (current.value[relative] !== ":") {
+					return { atoms: updated, removed: false };
+				}
+				const nextValue =
+					current.value.slice(0, relative) +
+					current.value.slice(relative + 1);
+				if (nextValue.trim().length === 0) {
+					updated.splice(index, 1);
+				} else {
+					updated[index] = { kind: "term", value: nextValue };
+				}
+				return { atoms: updated, removed: true };
+			}
+			cursor += length;
+		}
+		return { atoms: updated, removed: false };
+	}
+
+	private displayLength(atoms: QueryAtom[]): number {
+		return atoms.reduce((total, atom) => total + atom.value.length, 0);
+	}
+
+	private cancelPendingFilter() {
+		if (this.pendingFilterHandle) {
+			window.clearTimeout(this.pendingFilterHandle);
+			this.pendingFilterHandle = undefined;
+		}
+		this.pendingFilterCaret = undefined;
+	}
+
+	private handleLiteralColon(
+		event: Event,
+		raw: string,
+		cursor: number,
+		atoms: QueryAtom[],
+	): boolean {
+		if (!isColonInsert(event)) {
+			return false;
+		}
+		const insertIndex = cursor - 1;
+		const firstIndex = insertIndex - 1;
+		if (insertIndex < 0 || firstIndex < 0) {
+			return false;
+		}
+		if (raw[firstIndex] !== ":") {
+			return false;
+		}
+		const beforeFirst = firstIndex - 1;
+		if (beforeFirst >= 0 && !/\s/.test(raw[beforeFirst])) {
+			return false;
+		}
+		this.cancelPendingFilter();
+		const removal = this.removeColonAtOffset(atoms, cursor - 1);
+		const nextCursor = removal.removed ? Math.max(0, cursor - 1) : cursor;
+		this.setAtoms(removal.atoms, nextCursor);
+		return true;
 	}
 
 	private handleBackspaceToken(): boolean {
@@ -369,26 +593,36 @@ export class GraphQueryModal extends Modal {
 		if (selection && !selection.isCollapsed) {
 			return false;
 		}
-		const start = getCaretOffset(this.inputEl) ?? 0;
-		let span = findSpanAtCursor(this.layout.spans, start);
-		const raw = this.rawQuery;
-		if (!span) {
-			span =
-				this.layout.spans.find(
-					(candidate) =>
-						start === candidate.end + 1 &&
-						raw[candidate.end] === '"',
-				) ?? null;
-		}
-		if (!span) {
+		const range = selection?.getRangeAt(0);
+		if (!range) {
 			return false;
 		}
-		const tokenRange = findTokenRange(raw, span);
-		if (!tokenRange) {
+		const startOffset = getCaretOffset(this.inputEl) ?? 0;
+		let chipEl: HTMLElement | null = null;
+		const container = range.startContainer;
+		if (container.nodeType === Node.ELEMENT_NODE) {
+			chipEl = (container as HTMLElement).closest(".graph-search-chip");
+		} else {
+			chipEl =
+				container.parentElement?.closest(".graph-search-chip") ?? null;
+		}
+		if (!chipEl && container.nodeType === Node.TEXT_NODE) {
+			if (range.startOffset === 0) {
+				const prev = container.previousSibling;
+				if (prev instanceof HTMLElement) {
+					chipEl = prev.classList.contains("graph-search-chip")
+						? prev
+						: null;
+				}
+			}
+		}
+		if (!chipEl) {
 			return false;
 		}
-		const updated = removeRange(raw, tokenRange.start, tokenRange.end);
-		this.setRawQuery(updated.value, updated.cursor);
+		chipEl.remove();
+		const atoms = extractAtomsFromEditable(this.inputEl as HTMLElement);
+		const nextOffset = Math.max(0, startOffset - 1);
+		this.setAtoms(atoms, nextOffset);
 		return true;
 	}
 

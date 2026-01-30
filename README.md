@@ -17,20 +17,18 @@ How to use
 Query syntax
 
 - Plain terms: `budget q3`
-- Tags: `tag:#meeting` (filters only)
-- Paths: `path:projects`
-- Near notes: `near:Bob` or `near:"Project Alpha"`
+- Filters: type `:` to insert chips for near, tag, or path
 
 Example
 
 ```
-budget tag:#meeting near:Bob near:"Project Alpha"
+budget [near: Bob] [tag: #meeting]
 ```
 
 Scoring behavior
 
 - Results must match tag/path filters.
-- When `near:` is used, only notes connected in the graph are included.
+- When near chips are used, only notes connected in the graph are included.
 - Distance 0 and 1 are weighted equally; deeper hops decay exponentially by `distanceFalloff`.
 - Total score = distance + title + body (weights applied in settings).
 

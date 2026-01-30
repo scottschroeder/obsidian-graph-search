@@ -258,6 +258,12 @@ fn parse_tag_term(term: &str) -> Option<String> {
         let value = term.trim_start_matches("tag:");
         return normalize_tag(value);
     }
+    if term.starts_with(":tag") {
+        let value = term.trim_start_matches(":tag");
+        if !value.is_empty() {
+            return normalize_tag(value);
+        }
+    }
     if term.starts_with('#') && term.len() > 1 {
         return normalize_tag(term);
     }
@@ -285,6 +291,12 @@ fn normalize_tag(raw: &str) -> Option<String> {
 fn parse_path_term(term: &str) -> Option<String> {
     if term.starts_with("path:") {
         return Some(term.trim_start_matches("path:").to_string());
+    }
+    if term.starts_with(":path") {
+        let value = term.trim_start_matches(":path");
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
     }
     None
 }

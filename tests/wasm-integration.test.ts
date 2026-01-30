@@ -17,14 +17,15 @@ beforeAll(() => {
 
 describe("wasm integration", () => {
 	it("parses query and layout", () => {
-		const parsed = wasm.parse_query("budget near:alpha");
+		const atoms = [
+			{ kind: "term", value: "budget" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "near", value: "alpha" },
+			{ kind: "tag", value: "#meeting" },
+		];
+		const parsed = wasm.parse_query_atoms(atoms);
 		expect(parsed.near_titles).toEqual(["alpha"]);
-		const layout = wasm.parse_query_layout(
-			'near:"alpha beta" tag:#meeting',
-		);
-		expect(layout.spans.length).toBe(2);
-		const prefixes = layout.spans.map((span: any) => span.prefix).sort();
-		expect(prefixes).toEqual(["near:", "tag:"]);
+		expect(parsed.base_query).toBe("budget tag:#meeting");
 	});
 
 	it("indexes and searches documents", () => {

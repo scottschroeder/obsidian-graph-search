@@ -47,6 +47,13 @@ pub fn parse_query(raw: String) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn parse_query_atoms(atoms: JsValue) -> Result<JsValue, JsValue> {
+    let atoms: Vec<query::QueryAtom> = swb::from_value(atoms)?;
+    let parsed = query::parse_query_atoms(&atoms);
+    swb::to_value(&parsed).map_err(|err| err.into())
+}
+
+#[wasm_bindgen]
 pub fn parse_query_layout(raw: String) -> Result<JsValue, JsValue> {
     let layout = query::parse_query_layout(&raw);
     swb::to_value(&layout).map_err(|err| err.into())

@@ -1,4 +1,20 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum QueryAtomKind {
+    Term,
+    Near,
+    Tag,
+    Path,
+    Whitespace,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct QueryAtom {
+    pub kind: QueryAtomKind,
+    pub value: String,
+}
 
 #[derive(Debug, Serialize)]
 pub struct ParsedQuery {
@@ -27,23 +43,81 @@ pub fn parse_query(raw: &str) -> ParsedQuery {
     let mut index = 0;
     while index < tokens.len() {
         let token = &tokens[index];
-        if token.starts_with("near:") {
-            let mut value = token[5..].to_string();
-            if value.is_empty() {
-                if let Some(next) = tokens.get(index + 1) {
-                    value = next.clone();
-                    index += 1;
-                }
-            }
+        if let Some((value, used_next)) =
+            extract_prefixed_value(tokens.as_slice(), index, token, "near:")
+        {
             let cleaned = strip_quotes(value);
             if !cleaned.is_empty() {
                 near_titles.push(cleaned);
+            }
+            if used_next {
+                index += 1;
+            }
+        } else if let Some((value, used_next)) =
+            extract_prefixed_value(tokens.as_slice(), index, token, ":near")
+        {
+            let cleaned = strip_quotes(value);
+            if !cleaned.is_empty() {
+                near_titles.push(cleaned);
+            }
+            if used_next {
+                index += 1;
+            }
+        } else if let Some((value, used_next)) =
+            extract_prefixed_value(tokens.as_slice(), index, token, ":tag")
+        {
+            if !value.is_empty() {
+                base_tokens.push(format!("tag:{}", value));
+            }
+            if used_next {
+                index += 1;
+            }
+        } else if let Some((value, used_next)) =
+            extract_prefixed_value(tokens.as_slice(), index, token, ":path")
+        {
+            if !value.is_empty() {
+                base_tokens.push(format!("path:{}", value));
+            }
+            if used_next {
+                index += 1;
             }
         } else {
             base_tokens.push(token.clone());
         }
 
         index += 1;
+    }
+
+    ParsedQuery {
+        near_titles,
+        base_query: base_tokens.join(" "),
+    }
+}
+
+pub fn parse_query_atoms(atoms: &[QueryAtom]) -> ParsedQuery {
+    let mut near_titles = Vec::new();
+    let mut base_tokens = Vec::new();
+
+    for atom in atoms {
+        let trimmed = atom.value.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match atom.kind {
+            QueryAtomKind::Near => {
+                near_titles.push(trimmed.to_string());
+            }
+            QueryAtomKind::Tag => {
+                base_tokens.push(format!("tag:{}", trimmed));
+            }
+            QueryAtomKind::Path => {
+                base_tokens.push(format!("path:{}", trimmed));
+            }
+            QueryAtomKind::Whitespace => {}
+            QueryAtomKind::Term => {
+                base_tokens.push(trimmed.to_string());
+            }
+        }
     }
 
     ParsedQuery {
@@ -66,10 +140,38 @@ pub fn parse_query_layout(raw: &str) -> QueryLayout {
                     index += 1;
                 }
             }
+        } else if token.text.starts_with(":near") {
+            if let Some(span) = build_span(&tokens, index, ":near") {
+                spans.push(span);
+                if token.text == ":near" {
+                    index += 1;
+                }
+            }
         } else if token.text.starts_with("tag:") {
             if let Some(span) = build_span(&tokens, index, "tag:") {
                 spans.push(span);
                 if token.text == "tag:" {
+                    index += 1;
+                }
+            }
+        } else if token.text.starts_with(":tag") {
+            if let Some(span) = build_span(&tokens, index, ":tag") {
+                spans.push(span);
+                if token.text == ":tag" {
+                    index += 1;
+                }
+            }
+        } else if token.text.starts_with("path:") {
+            if let Some(span) = build_span(&tokens, index, "path:") {
+                spans.push(span);
+                if token.text == "path:" {
+                    index += 1;
+                }
+            }
+        } else if token.text.starts_with(":path") {
+            if let Some(span) = build_span(&tokens, index, ":path") {
+                spans.push(span);
+                if token.text == ":path" {
                     index += 1;
                 }
             }
@@ -79,6 +181,26 @@ pub fn parse_query_layout(raw: &str) -> QueryLayout {
     }
 
     QueryLayout { spans }
+}
+
+fn extract_prefixed_value(
+    tokens: &[String],
+    index: usize,
+    token: &str,
+    prefix: &str,
+) -> Option<(String, bool)> {
+    if !token.starts_with(prefix) {
+        return None;
+    }
+    let mut value = token[prefix.len()..].to_string();
+    let mut used_next = false;
+    if value.is_empty() {
+        if let Some(next) = tokens.get(index + 1) {
+            value = next.clone();
+            used_next = true;
+        }
+    }
+    Some((value, used_next))
 }
 
 fn build_span(tokens: &[TokenSpan], index: usize, prefix: &str) -> Option<QuerySpan> {
@@ -228,41 +350,75 @@ mod tests {
 
     #[test]
     fn parse_query_extracts_near_titles() {
-        let parsed = parse_query("budget tag:#meeting near:bob near:myproject");
+        let parsed = parse_query("budget :tag #meeting :near bob :near myproject");
         assert_eq!(parsed.near_titles, vec!["bob", "myproject"]);
         assert_eq!(parsed.base_query, "budget tag:#meeting");
     }
 
     #[test]
     fn parse_query_handles_quoted_near() {
-        let parsed = parse_query("near:\"my project\" status");
+        let parsed = parse_query(":near \"my project\" status");
         assert_eq!(parsed.near_titles, vec!["my project"]);
         assert_eq!(parsed.base_query, "status");
     }
 
     #[test]
     fn parse_query_handles_separate_near_value() {
-        let parsed = parse_query("near: bob status");
+        let parsed = parse_query(":near bob status");
         assert_eq!(parsed.near_titles, vec!["bob"]);
         assert_eq!(parsed.base_query, "status");
     }
 
     #[test]
     fn parse_query_layout_tracks_spans() {
-        let layout = parse_query_layout("tag:#meeting near:\"my project\" notes");
+        let layout = parse_query_layout(":tag #meeting :near \"my project\" notes");
         assert_eq!(layout.spans.len(), 2);
         let near_span = layout
             .spans
             .iter()
-            .find(|span| span.prefix == "near:")
+            .find(|span| span.prefix == ":near")
             .expect("missing near span");
         assert_eq!(near_span.text, "my project");
         assert!(near_span.start < near_span.end);
         let tag_span = layout
             .spans
             .iter()
-            .find(|span| span.prefix == "tag:")
+            .find(|span| span.prefix == ":tag")
             .expect("missing tag span");
         assert_eq!(tag_span.text, "#meeting");
+    }
+
+    #[test]
+    fn parse_query_atoms_builds_base_and_near() {
+        let atoms = vec![
+            QueryAtom {
+                kind: QueryAtomKind::Near,
+                value: "My Note".to_string(),
+            },
+            QueryAtom {
+                kind: QueryAtomKind::Whitespace,
+                value: " ".to_string(),
+            },
+            QueryAtom {
+                kind: QueryAtomKind::Term,
+                value: "budget".to_string(),
+            },
+            QueryAtom {
+                kind: QueryAtomKind::Whitespace,
+                value: " ".to_string(),
+            },
+            QueryAtom {
+                kind: QueryAtomKind::Tag,
+                value: "#meeting".to_string(),
+            },
+            QueryAtom {
+                kind: QueryAtomKind::Term,
+                value: "deadline".to_string(),
+            },
+        ];
+
+        let parsed = parse_query_atoms(&atoms);
+        assert_eq!(parsed.near_titles, vec!["My Note"]);
+        assert_eq!(parsed.base_query, "budget tag:#meeting deadline");
     }
 }

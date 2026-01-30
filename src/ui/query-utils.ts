@@ -1,9 +1,52 @@
+import type { QueryAtom, QueryAtomKind } from "./types";
+
 export type ChipSpan = {
 	start: number;
 	end: number;
 	text: string;
 	prefix: string;
 };
+
+export function buildRawFromAtoms(atoms: QueryAtom[]): string {
+	return atoms
+		.filter((atom) => atom.kind === "term")
+		.map((atom) => atom.value.trim())
+		.filter((value) => value.length > 0)
+		.join(" ");
+}
+
+export function buildEditableHtmlFromAtoms(atoms: QueryAtom[]): string {
+	if (atoms.length === 0) {
+		return "";
+	}
+	const parts: string[] = [];
+	atoms.forEach((atom) => {
+		const value = atom.value;
+		if (!value) {
+			return;
+		}
+		if (atom.kind === "term" || atom.kind === "whitespace") {
+			parts.push(escapeHtml(value));
+			return;
+		}
+		parts.push(
+			`<span class="graph-search-chip" contenteditable="false" data-chip-kind="${escapeHtmlAttribute(
+				atom.kind,
+			)}" data-raw-prefix="" data-raw-suffix=""><span class="graph-search-chip-hidden"></span><span class="graph-search-chip-value">${escapeHtml(
+				value,
+			)}</span><span class="graph-search-chip-hidden"></span></span>`,
+		);
+	});
+	return parts.join("");
+}
+
+export function extractAtomsFromEditable(root: HTMLElement): QueryAtom[] {
+	const atoms: QueryAtom[] = [];
+	root.childNodes.forEach((node) => {
+		atoms.push(...extractAtomsFromNode(node));
+	});
+	return atoms;
+}
 
 export function findTokenAtCursor(
 	value: string,
@@ -27,7 +70,7 @@ export function findTokenAtCursor(
 
 export function formatNearValue(value: string): string {
 	const trimmed = stripMdExtension(value.trim());
-	return trimmed.includes(" ") ? `"${trimmed}"` : trimmed;
+	return trimmed;
 }
 
 export function formatTagValue(value: string): string {
@@ -44,8 +87,14 @@ export function extractSearchTerms(baseQuery: string): string[] {
 		.map((term) => term.trim())
 		.filter((term) => term.length > 0)
 		.map((term) => {
+			if (term.startsWith(":tag")) {
+				return term.slice(4);
+			}
 			if (term.startsWith("tag:")) {
 				return term.slice(4);
+			}
+			if (term.startsWith(":path")) {
+				return term.slice(5);
 			}
 			if (term.startsWith("path:")) {
 				return term.slice(5);
@@ -62,7 +111,13 @@ export function extractBodyTerms(baseQuery: string): string[] {
 		.filter((term) => term.length > 0)
 		.filter((term) => {
 			const lowered = term.toLowerCase();
+			if (lowered.startsWith(":tag")) {
+				return false;
+			}
 			if (lowered.startsWith("tag:")) {
+				return false;
+			}
+			if (lowered.startsWith(":path")) {
 				return false;
 			}
 			if (lowered.startsWith("path:")) {
@@ -228,7 +283,24 @@ export function findTokenRange(
 	}
 	const token = value.slice(start, end);
 	if (!token.startsWith(span.prefix)) {
-		return null;
+		let prefixEnd = start;
+		let seek = prefixEnd;
+		while (seek > 0 && /\s/.test(value[seek - 1])) {
+			seek -= 1;
+		}
+		if (seek === 0 && prefixEnd === start) {
+			return null;
+		}
+		const prefixTokenEnd = seek;
+		let prefixStart = prefixTokenEnd;
+		while (prefixStart > 0 && !/\s/.test(value[prefixStart - 1])) {
+			prefixStart -= 1;
+		}
+		const prefixToken = value.slice(prefixStart, prefixTokenEnd);
+		if (prefixToken !== span.prefix) {
+			return null;
+		}
+		return { start: prefixStart, end };
 	}
 	return { start, end };
 }
@@ -253,6 +325,36 @@ export function extractRawFromEditable(root: HTMLElement): string {
 		raw += extractRawFromNode(node);
 	});
 	return raw;
+}
+
+function extractAtomsFromNode(node: Node): QueryAtom[] {
+	if (node.nodeType === Node.TEXT_NODE) {
+		const text = node.textContent ?? "";
+		const tokens = text.match(/\s+|\S+/g) ?? [];
+		return tokens.map((token) => {
+			if (/^\s+$/.test(token)) {
+				return { kind: "whitespace" as const, value: " " };
+			}
+			return { kind: "term" as const, value: token };
+		});
+	}
+	if (node.nodeType !== Node.ELEMENT_NODE) {
+		return [];
+	}
+	const el = node as HTMLElement;
+	if (el.classList.contains("graph-search-chip")) {
+		const kind = (el.dataset.chipKind ?? "term") as QueryAtomKind;
+		const valueEl = el.querySelector(
+			".graph-search-chip-value",
+		) as HTMLElement | null;
+		const value = valueEl?.textContent ?? "";
+		return value.trim().length > 0 ? [{ kind, value: value.trim() }] : [];
+	}
+	const atoms: QueryAtom[] = [];
+	el.childNodes.forEach((child) => {
+		atoms.push(...extractAtomsFromNode(child));
+	});
+	return atoms;
 }
 
 export function getCaretOffset(root: HTMLElement): number | null {

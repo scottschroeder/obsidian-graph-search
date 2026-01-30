@@ -8,6 +8,13 @@ export type ParsedQuery = {
 	base_query: string;
 };
 
+export type QueryAtomKind = "term" | "near" | "tag" | "path" | "whitespace";
+
+export type QueryAtom = {
+	kind: QueryAtomKind;
+	value: string;
+};
+
 export type CandidateInput = {
 	title: string;
 	path: string;

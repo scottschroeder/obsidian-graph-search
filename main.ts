@@ -143,17 +143,39 @@ export default class GraphSearchPlugin extends Plugin {
 			.filter((term) => term.length > 0);
 		let candidates = files;
 
-		for (const term of terms) {
-			if (term.startsWith("tag:")) {
-				const rawTag = term.slice(4);
-				const normalized = rawTag.startsWith("#")
-					? rawTag
-					: `#${rawTag}`;
-				candidates = candidates.filter((file) => {
-					const cache = this.app.metadataCache.getFileCache(file);
-					const tags = cache?.tags ?? [];
-					return tags.some((tag) => tag.tag === normalized);
-				});
+		for (let index = 0; index < terms.length; index += 1) {
+			const term = terms[index];
+			if (term.startsWith("tag:") || term.startsWith(":tag")) {
+				let rawTag = term.slice(4);
+				if (!rawTag && index + 1 < terms.length) {
+					rawTag = terms[index + 1];
+					index += 1;
+				}
+				if (rawTag) {
+					const normalized = rawTag.startsWith("#")
+						? rawTag
+						: `#${rawTag}`;
+					candidates = candidates.filter((file) => {
+						const cache = this.app.metadataCache.getFileCache(file);
+						const tags = cache?.tags ?? [];
+						return tags.some((tag) => tag.tag === normalized);
+					});
+				}
+				continue;
+			}
+
+			if (term.startsWith("path:") || term.startsWith(":path")) {
+				let rawPath = term.slice(5);
+				if (!rawPath && index + 1 < terms.length) {
+					rawPath = terms[index + 1];
+					index += 1;
+				}
+				if (rawPath) {
+					const lowered = rawPath.toLowerCase();
+					candidates = candidates.filter((file) => {
+						return file.path.toLowerCase().includes(lowered);
+					});
+				}
 				continue;
 			}
 
