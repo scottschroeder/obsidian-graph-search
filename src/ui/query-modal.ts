@@ -135,10 +135,6 @@ export class GraphQueryModal extends Modal {
 		this.contentEl.empty();
 	}
 
-	private maybeSuggestChip(_event: Event, _raw: string, _cursor: number) {
-		return;
-	}
-
 	private maybeScheduleFilter(event: Event, raw: string, cursor: number) {
 		if (this.isSuggesting) {
 			return;

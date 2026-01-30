@@ -135,67 +135,6 @@ export default class GraphSearchPlugin extends Plugin {
 	getSearchContent(path: string): string {
 		return this.searchContentByPath.get(path) ?? "";
 	}
-
-	async getCandidates(baseQuery: string): Promise<CandidateInput[]> {
-		const files = this.app.vault.getMarkdownFiles();
-		const terms = baseQuery
-			.trim()
-			.split(/\s+/)
-			.filter((term) => term.length > 0);
-		let candidates = files;
-
-		for (let index = 0; index < terms.length; index += 1) {
-			const term = terms[index];
-			if (term.startsWith("tag:") || term.startsWith(":tag")) {
-				let rawTag = term.slice(4);
-				if (!rawTag && index + 1 < terms.length) {
-					rawTag = terms[index + 1];
-					index += 1;
-				}
-				if (rawTag) {
-					const normalized = rawTag.startsWith("#")
-						? rawTag
-						: `#${rawTag}`;
-					candidates = candidates.filter((file) => {
-						const cache = this.app.metadataCache.getFileCache(file);
-						const tags = cache?.tags ?? [];
-						return tags.some((tag) => tag.tag === normalized);
-					});
-				}
-				continue;
-			}
-
-			if (term.startsWith("path:") || term.startsWith(":path")) {
-				let rawPath = term.slice(5);
-				if (!rawPath && index + 1 < terms.length) {
-					rawPath = terms[index + 1];
-					index += 1;
-				}
-				if (rawPath) {
-					const lowered = rawPath.toLowerCase();
-					candidates = candidates.filter((file) => {
-						return file.path.toLowerCase().includes(lowered);
-					});
-				}
-				continue;
-			}
-
-			const lowered = term.toLowerCase();
-			candidates = candidates.filter((file) => {
-				return (
-					file.basename.toLowerCase().includes(lowered) ||
-					file.path.toLowerCase().includes(lowered)
-				);
-			});
-		}
-
-		return candidates.map((file) => ({
-			title: file.basename,
-			path: file.path,
-			title_score: 0,
-			body_score: 0,
-		}));
-	}
 }
 function collectFileTags(app: App, file: TFile): string[] {
 	const cache = app.metadataCache.getFileCache(file);
