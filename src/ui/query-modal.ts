@@ -23,6 +23,7 @@ import {
 	restoreCaretOffset,
 } from "./query-utils";
 import { openFilterPicker } from "./filter-suggest";
+import { openPathPicker } from "./path-suggest";
 import { openTitlePicker } from "./title-suggest";
 import { openTagPicker } from "./tag-suggest";
 
@@ -202,10 +203,16 @@ export class GraphQueryModal extends Modal {
 					return;
 				}
 				if (selected === "path") {
-					const value = window.prompt("Path filter") ?? "";
-					if (value.trim()) {
-						this.insertChipAtCaret("path", value, caret);
-					}
+					this.isSuggesting = true;
+					openPathPicker(
+						this.app,
+						(value) => {
+							this.insertChipAtCaret("path", value, caret);
+						},
+						() => {
+							this.isSuggesting = false;
+						},
+					);
 				}
 			},
 			() => {
