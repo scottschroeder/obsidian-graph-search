@@ -174,6 +174,17 @@ export class GraphQueryModal extends Modal {
 				if (selected === "literal") {
 					return;
 				}
+				if (selected === "near-current") {
+					const activeFile = this.app.workspace.getActiveFile();
+					if (activeFile) {
+						this.insertChipAtCaret(
+							"near",
+							activeFile.basename,
+							caret,
+						);
+					}
+					return;
+				}
 				if (selected === "near") {
 					this.isSuggesting = true;
 					openTitlePicker(

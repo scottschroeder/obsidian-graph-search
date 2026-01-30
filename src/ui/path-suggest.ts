@@ -57,6 +57,7 @@ function buildFolderItems(app: App): PathItem[] {
 	const items = app.vault
 		.getAllLoadedFiles()
 		.filter((file): file is TFolder => file instanceof TFolder)
+		.filter((folder) => folder.path.length > 0)
 		.map((folder) => ({
 			value: folder.path,
 			label: folder.path || "/",

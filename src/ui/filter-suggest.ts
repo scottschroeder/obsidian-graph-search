@@ -1,7 +1,7 @@
 import { App, FuzzySuggestModal } from "obsidian";
 
 type FilterItem = {
-	value: "near" | "tag" | "path" | "literal";
+	value: "near" | "near-current" | "tag" | "path" | "literal";
 	label: string;
 };
 
@@ -17,6 +17,7 @@ export function openFilterPicker(
 class FilterSuggestModal extends FuzzySuggestModal<FilterItem> {
 	private onSelect: (value: FilterItem["value"]) => void;
 	private onCancel?: () => void;
+	private items: FilterItem[];
 	private submitted = false;
 
 	constructor(
@@ -27,16 +28,12 @@ class FilterSuggestModal extends FuzzySuggestModal<FilterItem> {
 		super(app);
 		this.onSelect = onSelect;
 		this.onCancel = onCancel;
+		this.items = buildFilterItems(app);
 		this.setPlaceholder("Filter: near, tag, path");
 	}
 
 	getItems(): FilterItem[] {
-		return [
-			{ value: "literal", label: ": (literal)" },
-			{ value: "near", label: "near" },
-			{ value: "tag", label: "tag" },
-			{ value: "path", label: "path" },
-		];
+		return this.items;
 	}
 
 	getItemText(item: FilterItem): string {
@@ -54,4 +51,21 @@ class FilterSuggestModal extends FuzzySuggestModal<FilterItem> {
 			this.onCancel();
 		}
 	}
+}
+
+function buildFilterItems(app: App): FilterItem[] {
+	const items: FilterItem[] = [
+		{ value: "near", label: "near" },
+		{ value: "tag", label: "tag" },
+		{ value: "path", label: "path" },
+	];
+	const activeFile = app.workspace.getActiveFile();
+	if (activeFile) {
+		items.push({
+			value: "near-current",
+			label: `near: Current Note (${activeFile.basename})`,
+		});
+	}
+	items.push({ value: "literal", label: ": (literal)" });
+	return items;
 }
