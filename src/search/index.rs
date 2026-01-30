@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::tokenize::tokenize;
+use super::tokenize::{extract_composite_tokens, tokenize};
 use crate::models::CandidateInput;
 
 #[derive(Debug, Deserialize)]
@@ -64,7 +64,15 @@ impl SearchStore {
                 tokens.insert(token.clone());
                 title_tokens.insert(token);
             }
+            for token in extract_composite_tokens(&doc.title) {
+                tokens.insert(token.clone());
+                title_tokens.insert(token);
+            }
             for token in tokenize(&doc.body) {
+                tokens.insert(token.clone());
+                body_tokens.insert(token);
+            }
+            for token in extract_composite_tokens(&doc.body) {
                 tokens.insert(token.clone());
                 body_tokens.insert(token);
             }
@@ -412,6 +420,44 @@ mod tests {
         let results = store.search("alpha iterator");
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert_eq!(paths, vec!["notes/alpha-iterator.md".to_string()]);
+    }
+
+    #[test]
+    fn search_matches_composite_tokens() {
+        let mut store = SearchStore::new();
+        store.build(vec![
+            SearchDocumentInput {
+                title: "App Host".to_string(),
+                path: "notes/app.md".to_string(),
+                body: "Visit app.mysite.com for details.".to_string(),
+                tags: Some(vec![]),
+            },
+            SearchDocumentInput {
+                title: "Other".to_string(),
+                path: "notes/other.md".to_string(),
+                body: "No urls here".to_string(),
+                tags: Some(vec![]),
+            },
+        ]);
+
+        let results = store.search("app.mysite.com");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["notes/app.md".to_string()]);
+    }
+
+    #[test]
+    fn search_matches_dollar_variable() {
+        let mut store = SearchStore::new();
+        store.build(vec![SearchDocumentInput {
+            title: "Shell Notes".to_string(),
+            path: "notes/shell.md".to_string(),
+            body: "Export $PATH for scripts.".to_string(),
+            tags: Some(vec![]),
+        }]);
+
+        let results = store.search("$PATH");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["notes/shell.md".to_string()]);
     }
 
     #[test]
