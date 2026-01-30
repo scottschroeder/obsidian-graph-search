@@ -77,6 +77,7 @@ describe("wasm integration", () => {
 				body_weight: 1,
 				distance_falloff: 0.5,
 				connection_strength: 0,
+				distance_curve: "exponential",
 			},
 		);
 		expect(ranked.length).toBe(2);

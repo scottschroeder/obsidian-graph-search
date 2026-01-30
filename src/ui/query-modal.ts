@@ -300,8 +300,7 @@ export class GraphQueryModal extends Modal {
 			const scoreBadge = item.createDiv({
 				cls: "graph-search-score-badge",
 			});
-			// Use Math.round to get percentage, regardless of score range
-			scoreBadge.setText(`${Math.round(entry.total_score)}`);
+			scoreBadge.setText(entry.total_score.toFixed(2));
 
 			item.addEventListener("click", () => {
 				this.selectedIndex = index;

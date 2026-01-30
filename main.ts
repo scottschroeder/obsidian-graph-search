@@ -19,6 +19,7 @@ interface GraphSearchPluginSettings {
 	scoreWeightBody: number;
 	scoreDistanceFalloff: number;
 	scoreConnectionStrength: number;
+	scoreDistanceCurve: string;
 	debugMode: boolean;
 }
 
@@ -33,11 +34,12 @@ type GraphEdgeInput = {
 };
 
 const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
-	scoreWeightDistance: 1.0,
-	scoreWeightTitle: 1.0,
+	scoreWeightDistance: 5.0,
+	scoreWeightTitle: 3.0,
 	scoreWeightBody: 1.0,
-	scoreDistanceFalloff: 0.5,
-	scoreConnectionStrength: 0.5,
+	scoreDistanceFalloff: 0.1,
+	scoreConnectionStrength: 0.9,
+	scoreDistanceCurve: "exponential",
 	debugMode: false,
 };
 
@@ -83,6 +85,7 @@ export default class GraphSearchPlugin extends Plugin {
 			body_weight: this.settings.scoreWeightBody,
 			distance_falloff: this.settings.scoreDistanceFalloff,
 			connection_strength: this.settings.scoreConnectionStrength,
+			distance_curve: this.settings.scoreDistanceCurve,
 		};
 	}
 
@@ -216,6 +219,17 @@ class GraphSearchSettingTab extends PluginSettingTab {
 		containerEl.createEl("h3", { text: "Advanced Scoring" });
 
 		new Setting(containerEl)
+			.setName("Reset scoring defaults")
+			.setDesc("Restore all scoring settings to the built-in defaults")
+			.addButton((button) =>
+				button.setButtonText("Reset").onClick(async () => {
+					this.plugin.settings = { ...DEFAULT_SETTINGS };
+					await this.plugin.saveSettings();
+					this.display();
+				}),
+			);
+
+		new Setting(containerEl)
 			.setName("Debug mode")
 			.setDesc("Show scoring breakdown in result previews")
 			.addToggle((toggle) =>
@@ -229,10 +243,14 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Distance weight")
-			.setDesc("How much graph distance contributes to score")
+			.setDesc(
+				`How much graph distance contributes to score (default ${DEFAULT_SETTINGS.scoreWeightDistance})`,
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("1.0")
+					.setPlaceholder(
+						String(DEFAULT_SETTINGS.scoreWeightDistance),
+					)
 					.setValue(String(this.plugin.settings.scoreWeightDistance))
 					.onChange(async (value) => {
 						const parsed = Number.parseFloat(value);
@@ -245,10 +263,12 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Title match weight")
-			.setDesc("How much title matches contribute to score")
+			.setDesc(
+				`How much title matches contribute to score (default ${DEFAULT_SETTINGS.scoreWeightTitle})`,
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("1.0")
+					.setPlaceholder(String(DEFAULT_SETTINGS.scoreWeightTitle))
 					.setValue(String(this.plugin.settings.scoreWeightTitle))
 					.onChange(async (value) => {
 						const parsed = Number.parseFloat(value);
@@ -261,10 +281,12 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Body match weight")
-			.setDesc("How much body matches contribute to score")
+			.setDesc(
+				`How much body matches contribute to score (default ${DEFAULT_SETTINGS.scoreWeightBody})`,
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("1.0")
+					.setPlaceholder(String(DEFAULT_SETTINGS.scoreWeightBody))
 					.setValue(String(this.plugin.settings.scoreWeightBody))
 					.onChange(async (value) => {
 						const parsed = Number.parseFloat(value);
@@ -277,10 +299,14 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Distance falloff")
-			.setDesc("Controls how quickly distance score drops after 1-hop")
+			.setDesc(
+				`Controls how quickly distance score drops after 1-hop (default ${DEFAULT_SETTINGS.scoreDistanceFalloff})`,
+			)
 			.addText((text) =>
 				text
-					.setPlaceholder("0.5")
+					.setPlaceholder(
+						String(DEFAULT_SETTINGS.scoreDistanceFalloff),
+					)
 					.setValue(String(this.plugin.settings.scoreDistanceFalloff))
 					.onChange(async (value) => {
 						const parsed = Number.parseFloat(value);
@@ -292,13 +318,32 @@ class GraphSearchSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("Distance curve")
+			.setDesc(
+				`How distance scores decay across hops (default ${DEFAULT_SETTINGS.scoreDistanceCurve})`,
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("exponential", "Exponential")
+					.addOption("reciprocal", "Reciprocal")
+					.addOption("power", "Power")
+					.setValue(this.plugin.settings.scoreDistanceCurve)
+					.onChange(async (value) => {
+						this.plugin.settings.scoreDistanceCurve = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
 			.setName("Connection strength")
 			.setDesc(
-				"Penalizes paths that pass through high-degree notes (0 disables)",
+				`Penalizes paths that pass through high-degree notes (0 disables, default ${DEFAULT_SETTINGS.scoreConnectionStrength})`,
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("0.5")
+					.setPlaceholder(
+						String(DEFAULT_SETTINGS.scoreConnectionStrength),
+					)
 					.setValue(
 						String(this.plugin.settings.scoreConnectionStrength),
 					)

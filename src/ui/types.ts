@@ -31,6 +31,7 @@ export type ScoreWeights = {
 	body_weight: number;
 	distance_falloff: number;
 	connection_strength: number;
+	distance_curve: string;
 };
 
 export type SearchDocumentInput = {
