@@ -191,12 +191,12 @@ impl SearchStore {
     fn filter_by_token(&self, token: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
         let postings = self.index.get(token).cloned().unwrap_or_default();
         let postings_set: HashSet<usize> = postings.into_iter().collect();
-        if !postings_set.is_empty() {
-            return intersect_sets(current, postings_set);
-        }
 
         let prefix_matches = self.prefix_postings(token);
-        intersect_sets(current, prefix_matches)
+        let mut matches = postings_set;
+        matches.extend(prefix_matches);
+
+        intersect_sets(current, matches)
     }
 
     fn filter_by_tag(&self, tag: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
@@ -365,6 +365,53 @@ mod tests {
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert!(paths.contains(&"notes/iterate.md".to_string()));
         assert!(paths.contains(&"notes/iterator.md".to_string()));
+    }
+
+    #[test]
+    fn search_with_exact_and_prefix_tokens() {
+        let mut store = SearchStore::new();
+        store.build(vec![
+            SearchDocumentInput {
+                title: "Iterators".to_string(),
+                path: "notes/iterators.md".to_string(),
+                body: "".to_string(),
+                tags: Some(vec![]),
+            },
+            SearchDocumentInput {
+                title: "Iterator".to_string(),
+                path: "notes/iterator.md".to_string(),
+                body: "".to_string(),
+                tags: Some(vec![]),
+            },
+        ]);
+
+        let results = store.search("iterator");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert!(paths.contains(&"notes/iterator.md".to_string()));
+        assert!(paths.contains(&"notes/iterators.md".to_string()));
+    }
+
+    #[test]
+    fn search_preserves_prior_term_filtering_with_prefix_matches() {
+        let mut store = SearchStore::new();
+        store.build(vec![
+            SearchDocumentInput {
+                title: "Alpha Iterator".to_string(),
+                path: "notes/alpha-iterator.md".to_string(),
+                body: "".to_string(),
+                tags: Some(vec![]),
+            },
+            SearchDocumentInput {
+                title: "Iterators".to_string(),
+                path: "notes/iterators.md".to_string(),
+                body: "".to_string(),
+                tags: Some(vec![]),
+            },
+        ]);
+
+        let results = store.search("alpha iterator");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["notes/alpha-iterator.md".to_string()]);
     }
 
     #[test]
