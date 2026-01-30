@@ -1,8 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use petgraph::{
+    algo::dijkstra,
     graph::{Graph, NodeIndex},
     visit::EdgeRef,
+    Undirected,
 };
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -31,7 +33,7 @@ use crate::models::CandidateInput;
 pub struct ScoredCandidate {
     pub title: String,
     pub path: String,
-    pub distance_sum: usize,
+    pub distance_sum: f32,
     pub distance_score: f32,
     pub title_score: f32,
     pub body_score: f32,
@@ -44,6 +46,7 @@ pub struct ScoreWeights {
     pub title_weight: f32,
     pub body_weight: f32,
     pub distance_falloff: f32,
+    pub connection_strength: f32,
 }
 
 #[derive(Debug, Serialize)]
@@ -169,7 +172,7 @@ impl GraphStore {
                     ScoredCandidate {
                         title: candidate.title,
                         path: candidate.path,
-                        distance_sum: 0,
+                        distance_sum: 0.0,
                         distance_score: 0.0,
                         title_score: candidate.title_score,
                         body_score: candidate.body_score,
@@ -194,9 +197,35 @@ impl GraphStore {
             }
         }
 
+        let degrees = self.degree_map();
+        let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
+        let undirected = if use_weighted {
+            Some(self.graph.clone().into_edge_type::<Undirected>())
+        } else {
+            None
+        };
         let distance_maps: Vec<_> = sources
             .iter()
-            .map(|source| bfs_multi_source(&self.graph, &[*source]))
+            .map(|source| {
+                if let Some(graph) = undirected.as_ref() {
+                    dijkstra(graph, *source, None, |edge| {
+                        let deg_a = *degrees.get(&edge.source()).unwrap_or(&0);
+                        let deg_b = *degrees.get(&edge.target()).unwrap_or(&0);
+                        let degree_sum = (deg_a + deg_b) as f32;
+                        let base = if degree_sum > 0.0 {
+                            degree_sum / 2.0
+                        } else {
+                            1.0
+                        };
+                        base.powf(weights.connection_strength)
+                    })
+                } else {
+                    bfs_multi_source(&self.graph, &[*source])
+                        .into_iter()
+                        .map(|(node, distance)| (node, distance as f32))
+                        .collect()
+                }
+            })
             .collect();
 
         let mut results = Vec::new();
@@ -205,7 +234,7 @@ impl GraphStore {
                 continue;
             };
 
-            let mut total = 0usize;
+            let mut total = 0.0f32;
             let mut missing = false;
             for map in &distance_maps {
                 if let Some(distance) = map.get(&node) {
@@ -217,8 +246,8 @@ impl GraphStore {
             }
 
             if !missing {
-                let effective_distance = total.saturating_sub(1);
-                let distance_score = (-weights.distance_falloff * effective_distance as f32).exp();
+                let effective_distance = (total - 1.0).max(0.0);
+                let distance_score = (-weights.distance_falloff * effective_distance).exp();
                 let total_score = weights.distance_weight * distance_score
                     + weights.title_weight * candidate.title_score
                     + weights.body_weight * candidate.body_score;
@@ -276,6 +305,24 @@ fn normalize_title_key(value: &str) -> String {
 }
 
 impl GraphStore {
+    fn degree_map(&self) -> HashMap<NodeIndex, usize> {
+        let mut neighbors: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
+        for edge in self.graph.edge_references() {
+            let from = edge.source();
+            let to = edge.target();
+            neighbors.entry(from).or_default().insert(to);
+            neighbors.entry(to).or_default().insert(from);
+        }
+        for node in self.graph.node_indices() {
+            neighbors.entry(node).or_default();
+        }
+
+        neighbors
+            .into_iter()
+            .map(|(node, entries)| (node, entries.len()))
+            .collect()
+    }
+
     fn resolve_near(&self, value: &str) -> Option<NodeIndex> {
         if let Some(node) = self.path_index.get(value).copied() {
             return Some(node);
@@ -424,6 +471,7 @@ mod tests {
             title_weight: 0.0,
             body_weight: 0.0,
             distance_falloff: 0.5,
+            connection_strength: 0.0,
         };
         let candidates = vec![
             CandidateInput {

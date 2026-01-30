@@ -76,6 +76,7 @@ describe("wasm integration", () => {
 				title_weight: 1,
 				body_weight: 1,
 				distance_falloff: 0.5,
+				connection_strength: 0,
 			},
 		);
 		expect(ranked.length).toBe(2);
@@ -85,7 +86,7 @@ describe("wasm integration", () => {
 				entry.distance_sum,
 			]),
 		);
-		expect(distances.get("alpha.md")).toBe(0);
-		expect(distances.get("beta.md")).toBe(1);
+		expect(distances.get("alpha.md")).toBeCloseTo(0, 5);
+		expect(distances.get("beta.md")).toBeCloseTo(1, 5);
 	});
 });

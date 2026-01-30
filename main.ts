@@ -1,10 +1,4 @@
-import {
-	App,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	TFile,
-} from "obsidian";
+import { App, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
 
 import * as plugin from "./pkg/obsidian_rust_plugin";
 import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
@@ -24,6 +18,7 @@ interface GraphSearchPluginSettings {
 	scoreWeightTitle: number;
 	scoreWeightBody: number;
 	scoreDistanceFalloff: number;
+	scoreConnectionStrength: number;
 	debugMode: boolean;
 }
 
@@ -42,6 +37,7 @@ const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 	scoreWeightTitle: 1.0,
 	scoreWeightBody: 1.0,
 	scoreDistanceFalloff: 0.5,
+	scoreConnectionStrength: 0.5,
 	debugMode: false,
 };
 
@@ -86,6 +82,7 @@ export default class GraphSearchPlugin extends Plugin {
 			title_weight: this.settings.scoreWeightTitle,
 			body_weight: this.settings.scoreWeightBody,
 			distance_falloff: this.settings.scoreDistanceFalloff,
+			connection_strength: this.settings.scoreConnectionStrength,
 		};
 	}
 
@@ -289,6 +286,27 @@ class GraphSearchSettingTab extends PluginSettingTab {
 						const parsed = Number.parseFloat(value);
 						if (!Number.isNaN(parsed)) {
 							this.plugin.settings.scoreDistanceFalloff = parsed;
+							await this.plugin.saveSettings();
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Connection strength")
+			.setDesc(
+				"Penalizes paths that pass through high-degree notes (0 disables)",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("0.5")
+					.setValue(
+						String(this.plugin.settings.scoreConnectionStrength),
+					)
+					.onChange(async (value) => {
+						const parsed = Number.parseFloat(value);
+						if (!Number.isNaN(parsed)) {
+							this.plugin.settings.scoreConnectionStrength =
+								parsed;
 							await this.plugin.saveSettings();
 						}
 					}),
