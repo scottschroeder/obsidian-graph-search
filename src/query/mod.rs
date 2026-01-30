@@ -421,4 +421,18 @@ mod tests {
         assert_eq!(parsed.near_titles, vec!["My Note"]);
         assert_eq!(parsed.base_query, "budget tag:#meeting deadline");
     }
+
+    #[test]
+    fn parse_query_handles_path_prefix() {
+        let parsed = parse_query("path:folder/sub budget");
+        assert_eq!(parsed.base_query, "path:folder/sub budget");
+        assert!(parsed.near_titles.is_empty());
+    }
+
+    #[test]
+    fn parse_query_handles_colon_path_prefix() {
+        let parsed = parse_query(":pathfolder budget");
+        assert_eq!(parsed.base_query, "path:folder budget");
+        assert!(parsed.near_titles.is_empty());
+    }
 }

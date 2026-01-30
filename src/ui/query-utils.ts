@@ -1,4 +1,33 @@
 import type { QueryAtom, QueryAtomKind } from "./types";
+import { stripMdExtension } from "../link-utils";
+
+export function normalizeAtoms(atoms: QueryAtom[]): QueryAtom[] {
+	const normalized: QueryAtom[] = [];
+	for (const atom of atoms) {
+		if (atom.kind === "whitespace") {
+			if (normalized.length === 0) {
+				continue;
+			}
+			const last = normalized[normalized.length - 1];
+			if (last.kind === "whitespace") {
+				continue;
+			}
+			normalized.push({ kind: "whitespace", value: " " });
+			continue;
+		}
+		const trimmed = atom.value.trim();
+		if (!trimmed) {
+			continue;
+		}
+		const last = normalized[normalized.length - 1];
+		if (last && last.kind === "term" && atom.kind === "term") {
+			last.value += trimmed;
+			continue;
+		}
+		normalized.push({ kind: atom.kind, value: trimmed });
+	}
+	return normalized.filter((atom) => atom.value.length > 0);
+}
 
 export type ChipSpan = {
 	start: number;
@@ -195,9 +224,7 @@ export function escapeHtmlAttribute(value: string): string {
 	return escapeHtml(value).replace(/\n/g, "&#10;");
 }
 
-export function stripMdExtension(value: string): string {
-	return value.toLowerCase().endsWith(".md") ? value.slice(0, -3) : value;
-}
+export { stripMdExtension };
 
 export function isColonInsert(event: Event): boolean {
 	if (!(event instanceof InputEvent)) {

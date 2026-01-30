@@ -6,7 +6,9 @@ pub fn tokenize(text: &str) -> Vec<String> {
 
     for ch in text.chars() {
         if is_token_char(ch, current.is_empty()) {
-            current.push(ch.to_ascii_lowercase());
+            for c in ch.to_lowercase() {
+                current.push(c);
+            }
         } else if !current.is_empty() {
             tokens.push(current);
             current = String::new();
@@ -28,7 +30,9 @@ pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
 
     for ch in text.chars() {
         if ch.is_alphanumeric() {
-            current.push(ch.to_ascii_lowercase());
+            for c in ch.to_lowercase() {
+                current.push(c);
+            }
             has_alnum = true;
             continue;
         }
@@ -152,5 +156,22 @@ mod tests {
         assert!(!tokens.contains("end."));
         assert!(tokens.contains("mid-/dash"));
         assert!(tokens.contains("$money"));
+    }
+
+    #[test]
+    fn tokenize_unicode_characters() {
+        let tokens = tokenize("Über café naïve");
+        assert!(tokens.contains(&"über".to_string()));
+        assert!(tokens.contains(&"café".to_string()));
+        assert!(tokens.contains(&"naïve".to_string()));
+    }
+
+    #[test]
+    fn tokenize_very_long_token() {
+        let long_token: String = "a".repeat(1000);
+        let text = format!("hello {} world", long_token);
+        let tokens = tokenize(&text);
+        assert_eq!(tokens.len(), 3);
+        assert!(tokens.contains(&long_token));
     }
 }

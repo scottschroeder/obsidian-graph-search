@@ -551,4 +551,167 @@ mod tests {
         assert!((beta.distance_score - 1.0).abs() < 1e-6);
         assert!(gamma.distance_score < 1.0);
     }
+
+    #[test]
+    fn degree_map_returns_correct_degrees() {
+        let mut store = GraphStore::new();
+        let nodes = vec![
+            NodeInput {
+                title: "hub".to_string(),
+                path: "hub.md".to_string(),
+            },
+            NodeInput {
+                title: "spoke1".to_string(),
+                path: "spoke1.md".to_string(),
+            },
+            NodeInput {
+                title: "spoke2".to_string(),
+                path: "spoke2.md".to_string(),
+            },
+            NodeInput {
+                title: "isolated".to_string(),
+                path: "isolated.md".to_string(),
+            },
+        ];
+        let edges = vec![
+            EdgeInput {
+                from: "hub.md".to_string(),
+                to: "spoke1.md".to_string(),
+            },
+            EdgeInput {
+                from: "hub.md".to_string(),
+                to: "spoke2.md".to_string(),
+            },
+            EdgeInput {
+                from: "spoke1.md".to_string(),
+                to: "hub.md".to_string(),
+            },
+        ];
+        store.build(nodes, edges);
+
+        let degrees = store.degree_map();
+        let hub_index = store.path_index.get("hub.md").unwrap();
+        let spoke1_index = store.path_index.get("spoke1.md").unwrap();
+        let spoke2_index = store.path_index.get("spoke2.md").unwrap();
+        let isolated_index = store.path_index.get("isolated.md").unwrap();
+
+        assert_eq!(degrees.get(hub_index).copied().unwrap_or(0), 2);
+        assert_eq!(degrees.get(spoke1_index).copied().unwrap_or(0), 1);
+        assert_eq!(degrees.get(spoke2_index).copied().unwrap_or(0), 1);
+        assert_eq!(degrees.get(isolated_index).copied().unwrap_or(0), 0);
+    }
+
+    #[test]
+    fn rank_candidates_with_weighted_dijkstra() {
+        let mut store = GraphStore::new();
+        let nodes = vec![
+            NodeInput {
+                title: "start".to_string(),
+                path: "start.md".to_string(),
+            },
+            NodeInput {
+                title: "hub".to_string(),
+                path: "hub.md".to_string(),
+            },
+            NodeInput {
+                title: "end".to_string(),
+                path: "end.md".to_string(),
+            },
+        ];
+        let edges = vec![
+            EdgeInput {
+                from: "start.md".to_string(),
+                to: "hub.md".to_string(),
+            },
+            EdgeInput {
+                from: "hub.md".to_string(),
+                to: "end.md".to_string(),
+            },
+        ];
+        store.build(nodes, edges);
+
+        let weights = ScoreWeights {
+            distance_weight: 1.0,
+            title_weight: 0.0,
+            body_weight: 0.0,
+            distance_falloff: 0.5,
+            connection_strength: 1.0,
+            distance_curve: "exponential".to_string(),
+        };
+        let candidates = vec![
+            CandidateInput {
+                title: "hub".to_string(),
+                path: "hub.md".to_string(),
+                title_score: 0.0,
+                body_score: 0.0,
+            },
+            CandidateInput {
+                title: "end".to_string(),
+                path: "end.md".to_string(),
+                title_score: 0.0,
+                body_score: 0.0,
+            },
+        ];
+
+        let results = store.rank_candidates(vec!["start".to_string()], candidates, weights);
+        assert_eq!(results.len(), 2);
+        let by_path: HashMap<_, _> = results
+            .into_iter()
+            .map(|entry| (entry.path.clone(), entry))
+            .collect();
+
+        let hub = by_path.get("hub.md").unwrap();
+        let end = by_path.get("end.md").unwrap();
+        assert!(hub.distance_score >= end.distance_score);
+    }
+
+    #[test]
+    fn resolve_near_appends_md_extension() {
+        let mut store = GraphStore::new();
+        let nodes = vec![NodeInput {
+            title: "note".to_string(),
+            path: "folder/note.md".to_string(),
+        }];
+        store.build(nodes, Vec::new());
+
+        let resolved = store.resolve_near("folder/note");
+        assert!(resolved.is_some());
+
+        let node = resolved.unwrap();
+        assert_eq!(store.graph[node].path, "folder/note.md");
+    }
+
+    #[test]
+    fn rank_candidates_disconnected_returns_empty() {
+        let mut store = GraphStore::new();
+        let nodes = vec![
+            NodeInput {
+                title: "island1".to_string(),
+                path: "island1.md".to_string(),
+            },
+            NodeInput {
+                title: "island2".to_string(),
+                path: "island2.md".to_string(),
+            },
+        ];
+        store.build(nodes, Vec::new());
+
+        let weights = ScoreWeights {
+            distance_weight: 1.0,
+            title_weight: 0.0,
+            body_weight: 0.0,
+            distance_falloff: 0.5,
+            connection_strength: 0.0,
+            distance_curve: "exponential".to_string(),
+        };
+        let candidates = vec![CandidateInput {
+            title: "island2".to_string(),
+            path: "island2.md".to_string(),
+            title_score: 0.0,
+            body_score: 0.0,
+        }];
+
+        let results = store.rank_candidates(vec!["island1".to_string()], candidates, weights);
+        assert!(results.is_empty());
+    }
 }

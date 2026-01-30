@@ -494,4 +494,28 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "logs/tagged.md");
     }
+
+    #[test]
+    fn search_empty_query_returns_all_docs() {
+        let store = build_store();
+        let results = store.search("");
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.title_score == 0.0 && r.body_score == 0.0));
+    }
+
+    #[test]
+    fn search_by_colon_tag_prefix() {
+        let store = build_store();
+        let results = store.search(":tag#meeting");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "meetings/budget.md");
+    }
+
+    #[test]
+    fn search_handles_only_whitespace_query() {
+        let store = build_store();
+        let results = store.search("   ");
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.title_score == 0.0 && r.body_score == 0.0));
+    }
 }

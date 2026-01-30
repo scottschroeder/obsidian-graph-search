@@ -20,6 +20,7 @@ import {
 	formatTagValue,
 	getCaretOffset,
 	isColonInsert,
+	normalizeAtoms,
 	restoreCaretOffset,
 } from "./query-utils";
 import { openFilterPicker } from "./filter-suggest";
@@ -378,39 +379,11 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private setAtoms(atoms: QueryAtom[], caretOffset?: number) {
-		this.atoms = this.normalizeAtoms(atoms);
+		this.atoms = normalizeAtoms(atoms);
 		this.rawQuery = buildRawFromAtoms(this.atoms);
 		this.renderEditable(caretOffset);
 		this.scheduleQuery();
 		this.inputEl?.focus();
-	}
-
-	private normalizeAtoms(atoms: QueryAtom[]): QueryAtom[] {
-		const normalized: QueryAtom[] = [];
-		for (const atom of atoms) {
-			if (atom.kind === "whitespace") {
-				if (normalized.length === 0) {
-					continue;
-				}
-				const last = normalized[normalized.length - 1];
-				if (last.kind === "whitespace") {
-					continue;
-				}
-				normalized.push({ kind: "whitespace", value: " " });
-				continue;
-			}
-			const trimmed = atom.value.trim();
-			if (!trimmed) {
-				continue;
-			}
-			const last = normalized[normalized.length - 1];
-			if (last && last.kind === "term" && atom.kind === "term") {
-				last.value += trimmed;
-				continue;
-			}
-			normalized.push({ kind: atom.kind, value: trimmed });
-		}
-		return normalized.filter((atom) => atom.value.length > 0);
 	}
 
 	private insertChipAtCaret(

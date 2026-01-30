@@ -5,9 +5,14 @@ import type { QueryAtom } from "../src/ui/types";
 import {
 	buildEditableHtmlFromAtoms,
 	buildRawFromAtoms,
+	buildSnippet,
+	escapeHtml,
+	escapeRegExp,
 	extractAtomsFromEditable,
 	extractRawFromEditable,
+	findTokenAtCursor,
 	getCaretOffset,
+	highlightSnippet,
 	restoreCaretOffset,
 	stripMdExtension,
 } from "../src/ui/query-utils";
@@ -71,5 +76,113 @@ describe("query utils", () => {
 		const div = document.createElement("div");
 		div.innerHTML = html;
 		expect(extractRawFromEditable(div)).toBe("#meeting notes");
+	});
+});
+
+describe("buildSnippet", () => {
+	it("returns empty for empty body", () => {
+		expect(buildSnippet("", ["term"])).toBe("");
+	});
+
+	it("returns empty for no terms", () => {
+		expect(buildSnippet("some body text", [])).toBe("");
+	});
+
+	it("returns empty when no terms match", () => {
+		expect(buildSnippet("hello world", ["missing"])).toBe("");
+	});
+
+	it("centers snippet around first match", () => {
+		const body = "prefix ".repeat(20) + "TARGET " + "suffix ".repeat(20);
+		const snippet = buildSnippet(body, ["target"]);
+		expect(snippet).toContain("TARGET");
+		expect(snippet).toContain("graph-search-highlight");
+	});
+
+	it("handles match at start of body", () => {
+		const snippet = buildSnippet("target is at the start", ["target"]);
+		expect(snippet).toContain("target");
+		expect(snippet).toContain("graph-search-highlight");
+	});
+
+	it("handles match at end of body", () => {
+		const body = "prefix ".repeat(30) + "target";
+		const snippet = buildSnippet(body, ["target"]);
+		expect(snippet).toContain("target");
+		expect(snippet).toContain("graph-search-highlight");
+	});
+});
+
+describe("highlightSnippet", () => {
+	it("wraps matching terms in highlight span", () => {
+		const result = highlightSnippet("hello world", ["world"]);
+		expect(result).toBe(
+			'hello <span class="graph-search-highlight">world</span>',
+		);
+	});
+
+	it("handles multiple term matches", () => {
+		const result = highlightSnippet("hello world hello", ["hello"]);
+		expect(result).toBe(
+			'<span class="graph-search-highlight">hello</span> world <span class="graph-search-highlight">hello</span>',
+		);
+	});
+
+	it("is case insensitive", () => {
+		const result = highlightSnippet("Hello World", ["hello"]);
+		expect(result).toBe(
+			'<span class="graph-search-highlight">Hello</span> World',
+		);
+	});
+
+	it("strips # prefix from tag terms", () => {
+		const result = highlightSnippet("meeting notes", ["#meeting"]);
+		expect(result).toBe(
+			'<span class="graph-search-highlight">meeting</span> notes',
+		);
+	});
+});
+
+describe("findTokenAtCursor", () => {
+	it("returns null for empty string", () => {
+		expect(findTokenAtCursor("", 0)).toBeNull();
+	});
+
+	it("finds token at cursor position", () => {
+		const result = findTokenAtCursor("hello world", 7);
+		expect(result).toEqual({ start: 6, end: 11, token: "world" });
+	});
+
+	it("handles cursor at word boundary", () => {
+		const result = findTokenAtCursor("hello world", 5);
+		expect(result).toEqual({ start: 0, end: 5, token: "hello" });
+	});
+});
+
+describe("escapeHtml", () => {
+	it("escapes < > & \" '", () => {
+		expect(escapeHtml('<div class="test">&\'>')).toBe(
+			"&lt;div class=&quot;test&quot;&gt;&amp;&#39;&gt;",
+		);
+	});
+
+	it("handles empty string", () => {
+		expect(escapeHtml("")).toBe("");
+	});
+
+	it("handles string with no special chars", () => {
+		expect(escapeHtml("hello world")).toBe("hello world");
+	});
+});
+
+describe("escapeRegExp", () => {
+	it("escapes regex special characters", () => {
+		expect(escapeRegExp("a.b*c?d+e[f]g")).toBe(
+			"a\\.b\\*c\\?d\\+e\\[f\\]g",
+		);
+	});
+
+	it("handles string with no special chars", () => {
+		expect(escapeRegExp("hello")).toBe("hello");
 	});
 });

@@ -22,7 +22,7 @@ export class GraphDistancesModal extends Modal {
 		const list = contentEl.createEl("ul");
 		this.entries.slice(0, 25).forEach((entry) => {
 			const label =
-				entry.distance === null
+				entry.distance == null
 					? "unreachable"
 					: entry.distance.toString();
 			list.createEl("li", {
