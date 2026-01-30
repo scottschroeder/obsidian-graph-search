@@ -296,6 +296,13 @@ export class GraphQueryModal extends Modal {
 				);
 			}
 
+			// Add match quality badge
+			const scoreBadge = item.createDiv({
+				cls: "graph-search-score-badge",
+			});
+			// Use Math.round to get percentage, regardless of score range
+			scoreBadge.setText(`${Math.round(entry.total_score)}`);
+
 			item.addEventListener("click", () => {
 				this.selectedIndex = index;
 				this.openSelectedResult();
