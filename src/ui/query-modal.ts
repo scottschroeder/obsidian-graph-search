@@ -10,19 +10,20 @@ import type {
 	ScoreWeights,
 } from "./types";
 import {
-	buildEditableHtmlFromAtoms,
-	buildSnippet,
 	buildRawFromAtoms,
 	extractBodyTerms,
-	extractAtomsFromEditable,
-	extractRawFromEditable,
 	formatNearValue,
 	formatTagValue,
-	getCaretOffset,
 	isColonInsert,
 	normalizeAtoms,
-	restoreCaretOffset,
 } from "./query-utils";
+import { buildEditableHtmlFromAtoms, buildSnippet } from "./html-utils";
+import {
+	extractAtomsFromEditable,
+	extractRawFromEditable,
+	getCaretOffset,
+	restoreCaretOffset,
+} from "./editable-dom";
 import { openFilterPicker } from "./filter-suggest";
 import { openPathPicker } from "./path-suggest";
 import { openTitlePicker } from "./title-suggest";

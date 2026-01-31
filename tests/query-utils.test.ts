@@ -3,19 +3,23 @@ import { describe, expect, it } from "vitest";
 import type { QueryAtom } from "../src/ui/types";
 
 import {
-	buildEditableHtmlFromAtoms,
 	buildRawFromAtoms,
+	findTokenAtCursor,
+	stripMdExtension,
+} from "../src/ui/query-utils";
+import {
+	buildEditableHtmlFromAtoms,
 	buildSnippet,
 	escapeHtml,
 	escapeRegExp,
+	highlightSnippet,
+} from "../src/ui/html-utils";
+import {
 	extractAtomsFromEditable,
 	extractRawFromEditable,
-	findTokenAtCursor,
 	getCaretOffset,
-	highlightSnippet,
 	restoreCaretOffset,
-	stripMdExtension,
-} from "../src/ui/query-utils";
+} from "../src/ui/editable-dom";
 
 describe("query utils", () => {
 	it("strips .md extension", () => {
