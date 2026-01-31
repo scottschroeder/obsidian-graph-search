@@ -39,14 +39,12 @@ pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
 
         if is_composite_separator(ch) {
             if current.is_empty() {
-                if ch == '$' {
+                if is_prefix_separator(ch) {
                     current.push(ch);
                     has_separator = true;
                     continue;
                 }
-                if is_valid_composite_token(&current, has_alnum, has_separator) {
-                    tokens.insert(current.clone());
-                }
+                add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
                 current.clear();
                 has_separator = false;
                 has_alnum = false;
@@ -57,17 +55,13 @@ pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
             continue;
         }
 
-        if is_valid_composite_token(&current, has_alnum, has_separator) {
-            tokens.insert(current.clone());
-        }
+        add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
         current.clear();
         has_separator = false;
         has_alnum = false;
     }
 
-    if is_valid_composite_token(&current, has_alnum, has_separator) {
-        tokens.insert(current);
-    }
+    add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
 
     tokens
 }
@@ -83,7 +77,15 @@ fn is_token_char(ch: char, is_start: bool) -> bool {
 }
 
 fn is_composite_separator(ch: char) -> bool {
-    matches!(ch, '.' | '/' | '-' | '_' | '&' | '$' | '+' | ':')
+    is_infix_separator(ch) || is_prefix_separator(ch)
+}
+
+fn is_infix_separator(ch: char) -> bool {
+    matches!(ch, '.' | '/' | '-' | '_' | '&' | '+' | ':')
+}
+
+fn is_prefix_separator(ch: char) -> bool {
+    matches!(ch, '$' | '/')
 }
 
 fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -> bool {
@@ -96,7 +98,7 @@ fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -
     let starts_ok = token
         .chars()
         .next()
-        .map(|ch| ch.is_alphanumeric() || ch == '$')
+        .map(|ch| ch.is_alphanumeric() || is_prefix_separator(ch))
         .unwrap_or(false);
     let ends_ok = token
         .chars()
@@ -104,6 +106,62 @@ fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -
         .map(|ch| ch.is_alphanumeric() || ch == '+')
         .unwrap_or(false);
     starts_ok && ends_ok
+}
+
+fn add_composite_token_if_valid(
+    tokens: &mut HashSet<String>,
+    token: &str,
+    has_alnum: bool,
+    has_separator: bool,
+) {
+    if is_valid_composite_token(token, has_alnum, has_separator) {
+        add_composite_token_variants(tokens, token);
+    }
+}
+
+fn add_composite_token_variants(tokens: &mut HashSet<String>, token: &str) {
+    tokens.insert(token.to_string());
+    add_composite_segments(tokens, token);
+    add_composite_suffixes(tokens, token);
+}
+
+fn add_composite_segments(tokens: &mut HashSet<String>, token: &str) {
+    let mut current = String::new();
+    for ch in token.chars() {
+        if is_composite_separator(ch) {
+            if !current.is_empty() {
+                tokens.insert(current.clone());
+                current.clear();
+            }
+            continue;
+        }
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        tokens.insert(current);
+    }
+}
+
+fn add_composite_suffixes(tokens: &mut HashSet<String>, token: &str) {
+    let mut starts = Vec::new();
+    let mut prev_is_sep = true;
+    for (idx, ch) in token.char_indices() {
+        let is_sep = is_composite_separator(ch);
+        if !is_sep && prev_is_sep {
+            starts.push(idx);
+        }
+        prev_is_sep = is_sep;
+    }
+    for start in starts.iter().skip(1) {
+        let suffix = &token[*start..];
+        if suffix.len() < 2 {
+            continue;
+        }
+        if !suffix.chars().any(is_composite_separator) {
+            continue;
+        }
+        tokens.insert(suffix.to_string());
+    }
 }
 
 #[cfg(test)]
@@ -135,6 +193,15 @@ mod tests {
         assert!(tokens.contains("c++"));
         assert!(tokens.contains("proto:v1"));
         assert!(tokens.contains("$path"));
+    }
+
+    #[test]
+    fn extract_composite_tokens_adds_subsections() {
+        let tokens = extract_composite_tokens("/v1/health:check");
+        assert!(tokens.contains("/v1/health:check"));
+        assert!(tokens.contains("health:check"));
+        assert!(tokens.contains("health"));
+        assert!(tokens.contains("check"));
     }
 
     #[test]

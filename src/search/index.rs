@@ -473,6 +473,21 @@ mod tests {
     }
 
     #[test]
+    fn search_matches_composite_suffix() {
+        let mut store = SearchStore::new();
+        store.build(vec![SearchDocumentInput {
+            title: "Health Check".to_string(),
+            path: "notes/health.md".to_string(),
+            body: "See /v1/health:check for the endpoint.".to_string(),
+            tags: Some(vec![]),
+        }]);
+
+        let results = store.search("health:check");
+        let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
+        assert_eq!(paths, vec!["notes/health.md".to_string()]);
+    }
+
+    #[test]
     fn tag_search_ignores_plain_text() {
         let mut store = SearchStore::new();
         store.build(vec![
