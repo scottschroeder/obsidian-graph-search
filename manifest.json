@@ -2,10 +2,9 @@
 	"id": "graph-search",
 	"name": "Graph Search",
 	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "Graph-aware search that ranks notes by link proximity plus title/body relevance.",
+	"minAppVersion": "1.11.5",
+	"description": "Search and rank notes by graph link proximity combined with title and body relevance.",
 	"author": "Scott Schroeder",
 	"authorUrl": "https://github.com/scottschroeder",
-	"fundingUrl": "https://github.com/scottschroeder",
 	"isDesktopOnly": false
 }

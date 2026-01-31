@@ -1,14 +1,6 @@
+import escapeHtml from "escape-html";
 import type { QueryAtom } from "./types";
 import { type ChipSpan, findTokenRange } from "./query-utils";
-
-export function escapeHtml(value: string): string {
-	return value
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/\"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}
 
 export function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

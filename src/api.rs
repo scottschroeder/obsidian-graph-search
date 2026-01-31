@@ -101,3 +101,10 @@ pub fn search_candidates(base_query: String) -> Result<JsValue, JsValue> {
     let results: Vec<CandidateInput> = SEARCH.with(|store| store.borrow().search(&base_query));
     swb::to_value(&results).map_err(|err| err.into())
 }
+
+#[wasm_bindgen]
+pub fn cleanup_all() -> Result<JsValue, JsValue> {
+    GRAPH.with(|store| store.borrow_mut().clear());
+    SEARCH.with(|store| store.borrow_mut().clear());
+    Ok(JsValue::NULL)
+}

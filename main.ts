@@ -44,7 +44,7 @@ export default class GraphSearchPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.addCommand({
-			id: "graph-search-query",
+			id: "query",
 			name: "Graph query",
 			callback: () => {
 				new GraphQueryModal(this.app, this).open();
@@ -58,7 +58,14 @@ export default class GraphSearchPlugin extends Plugin {
 		await plugin.default({ module_or_path: Promise.resolve(wasmBinary) });
 	}
 
-	onunload() {}
+	onunload() {
+		this.searchContentByPath.clear();
+		try {
+			plugin.cleanup_all();
+		} catch (e) {
+			// WASM cleanup failed, not critical
+		}
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -160,8 +167,7 @@ class GraphSearchSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Graph Search Settings" });
-		containerEl.createEl("h3", { text: "Advanced Scoring" });
+		new Setting(containerEl).setName("Advanced scoring").setHeading();
 
 		new Setting(containerEl)
 			.setName("Reset scoring defaults")

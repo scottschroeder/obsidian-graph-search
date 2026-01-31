@@ -1,3 +1,4 @@
+import escapeHtml from "escape-html";
 import { describe, expect, it } from "vitest";
 
 import type { QueryAtom } from "../src/ui/types";
@@ -10,7 +11,6 @@ import {
 import {
 	buildEditableHtmlFromAtoms,
 	buildSnippet,
-	escapeHtml,
 	escapeRegExp,
 	highlightSnippet,
 } from "../src/ui/html-utils";
@@ -176,6 +176,23 @@ describe("escapeHtml", () => {
 
 	it("handles string with no special chars", () => {
 		expect(escapeHtml("hello world")).toBe("hello world");
+	});
+
+	it("escapes HTML special characters", () => {
+		expect(escapeHtml("<script>")).toBe("&lt;script&gt;");
+		expect(escapeHtml('attr="val"')).toBe("attr=&quot;val&quot;");
+		expect(escapeHtml("a & b")).toBe("a &amp; b");
+		expect(escapeHtml("it's")).toBe("it&#39;s");
+	});
+
+	it("handles combined attack vectors", () => {
+		expect(escapeHtml('<img onerror="alert(1)">')).toBe(
+			"&lt;img onerror=&quot;alert(1)&quot;&gt;",
+		);
+	});
+
+	it("preserves safe characters", () => {
+		expect(escapeHtml("Hello World 123!@#$%")).toBe("Hello World 123!@#$%");
 	});
 });
 

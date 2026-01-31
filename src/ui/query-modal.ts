@@ -337,6 +337,10 @@ export class GraphQueryModal extends Modal {
 					const snippetEl = item.createDiv({
 						cls: "graph-search-snippet",
 					});
+					// innerHTML is used here for performance with highlighted snippets.
+					// XSS is prevented by escapeHtml() in buildSnippet() which sanitizes
+					// all content before highlight spans are inserted.
+					// See: https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines#Avoid+%60innerHTML%60%2C+%60outerHTML%60+and+%60insertAdjacentHTML%60
 					snippetEl.innerHTML = snippet;
 				}
 				if (showDebug && weights) {
@@ -375,6 +379,10 @@ export class GraphQueryModal extends Modal {
 			return;
 		}
 		this.isRendering = true;
+		// innerHTML is required for the contenteditable chip system where we need to
+		// preserve caret position across re-renders. Migration to DOM APIs would break
+		// caret positioning. XSS is prevented by escapeHtml() in buildEditableHtmlFromAtoms()
+		// which sanitizes all user input before insertion.
 		this.inputEl.innerHTML = buildEditableHtmlFromAtoms(this.atoms);
 		const offset = caretOffset ?? this.displayLength(this.atoms);
 		restoreCaretOffset(this.inputEl, offset);
