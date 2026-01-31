@@ -17,8 +17,6 @@ import {
 } from "./src/link-utils";
 import { collectFrontmatterTags, splitTagString } from "./src/tag-utils";
 
-// Remember to rename these classes and interfaces!
-
 interface GraphSearchPluginSettings {
 	scoreWeightDistance: number;
 	scoreWeightTitle: number;
@@ -148,7 +146,6 @@ function collectFileTags(app: App, file: TFile): string[] {
 		.map((tag) => (tag.startsWith("#") ? tag : `#${tag}`));
 	return Array.from(new Set(combined));
 }
-
 
 class GraphSearchSettingTab extends PluginSettingTab {
 	plugin: GraphSearchPlugin;

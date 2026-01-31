@@ -38,6 +38,9 @@ type GraphSearchPluginApi = {
 };
 
 export class GraphQueryModal extends Modal {
+	private static readonly DEBOUNCE_MS = 200;
+	private static readonly MAX_RESULTS = 50;
+
 	private plugin: GraphSearchPluginApi;
 	private inputEl?: HTMLDivElement;
 	private resultsEl?: HTMLDivElement;
@@ -284,7 +287,7 @@ export class GraphQueryModal extends Modal {
 		}
 		this.debounceHandle = window.setTimeout(() => {
 			this.runQuery();
-		}, 200);
+		}, GraphQueryModal.DEBOUNCE_MS);
 	}
 
 	private renderResults(
@@ -315,49 +318,52 @@ export class GraphQueryModal extends Modal {
 
 		const list = this.resultsEl.createDiv();
 		const weights = showDebug ? this.plugin.getScoreWeights() : null;
-		results.slice(0, 50).forEach((entry, index) => {
-			const item = list.createDiv({ cls: "suggestion-item" });
-			item.addClass("graph-search-result");
-			if (index === this.selectedIndex) {
-				item.addClass("is-selected");
-			}
-			const titleRow = item.createDiv({ cls: "graph-search-title" });
-			titleRow.setText(entry.title);
-			const pathRow = item.createDiv({ cls: "graph-search-path" });
-			pathRow.setText(entry.path);
+		results
+			.slice(0, GraphQueryModal.MAX_RESULTS)
+			.forEach((entry, index) => {
+				const item = list.createDiv({ cls: "suggestion-item" });
+				item.addClass("graph-search-result");
+				if (index === this.selectedIndex) {
+					item.addClass("is-selected");
+				}
+				const titleRow = item.createDiv({ cls: "graph-search-title" });
+				titleRow.setText(entry.title);
+				const pathRow = item.createDiv({ cls: "graph-search-path" });
+				pathRow.setText(entry.path);
 
-			const body = this.plugin.getSearchContent(entry.path);
-			const snippet = buildSnippet(body, this.lastSearchTerms);
-			if (snippet) {
-				const snippetEl = item.createDiv({
-					cls: "graph-search-snippet",
+				const body = this.plugin.getSearchContent(entry.path);
+				const snippet = buildSnippet(body, this.lastSearchTerms);
+				if (snippet) {
+					const snippetEl = item.createDiv({
+						cls: "graph-search-snippet",
+					});
+					snippetEl.innerHTML = snippet;
+				}
+				if (showDebug && weights) {
+					const weightedDistance =
+						entry.distance_score * weights.distance_weight;
+					const weightedTitle =
+						entry.title_score * weights.title_weight;
+					const weightedBody = entry.body_score * weights.body_weight;
+					const debugRow = item.createDiv({
+						cls: "graph-search-snippet",
+					});
+					debugRow.setText(
+						`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
+					);
+				}
+
+				// Add match quality badge
+				const scoreBadge = item.createDiv({
+					cls: "graph-search-score-badge",
 				});
-				snippetEl.innerHTML = snippet;
-			}
-			if (showDebug && weights) {
-				const weightedDistance =
-					entry.distance_score * weights.distance_weight;
-				const weightedTitle = entry.title_score * weights.title_weight;
-				const weightedBody = entry.body_score * weights.body_weight;
-				const debugRow = item.createDiv({
-					cls: "graph-search-snippet",
+				scoreBadge.setText(entry.total_score.toFixed(2));
+
+				item.addEventListener("click", () => {
+					this.selectedIndex = index;
+					this.openSelectedResult();
 				});
-				debugRow.setText(
-					`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
-				);
-			}
-
-			// Add match quality badge
-			const scoreBadge = item.createDiv({
-				cls: "graph-search-score-badge",
 			});
-			scoreBadge.setText(entry.total_score.toFixed(2));
-
-			item.addEventListener("click", () => {
-				this.selectedIndex = index;
-				this.openSelectedResult();
-			});
-		});
 		const selected = list.querySelector(".is-selected");
 		if (selected instanceof HTMLElement) {
 			selected.scrollIntoView({ block: "nearest" });

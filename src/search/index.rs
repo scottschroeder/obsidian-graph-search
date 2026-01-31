@@ -500,7 +500,9 @@ mod tests {
         let store = build_store();
         let results = store.search("");
         assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|r| r.title_score == 0.0 && r.body_score == 0.0));
+        assert!(results
+            .iter()
+            .all(|r| r.title_score == 0.0 && r.body_score == 0.0));
     }
 
     #[test]
@@ -516,6 +518,8 @@ mod tests {
         let store = build_store();
         let results = store.search("   ");
         assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|r| r.title_score == 0.0 && r.body_score == 0.0));
+        assert!(results
+            .iter()
+            .all(|r| r.title_score == 0.0 && r.body_score == 0.0));
     }
 }

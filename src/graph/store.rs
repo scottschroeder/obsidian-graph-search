@@ -237,6 +237,8 @@ impl GraphStore {
                 }
 
                 if !missing {
+                    // Subtracting 1 treats direct neighbors (distance=1) the same as
+                    // the source node itself (distance=0), since both represent immediate context.
                     let effective_distance = (total - 1.0).max(0.0);
                     let distance_score = score_distance(
                         effective_distance,
@@ -301,12 +303,13 @@ fn score_distance(distance: f32, falloff: f32, curve: &str) -> f32 {
             let exponent = if falloff <= 0.0 { 1.0 } else { falloff };
             1.0 / (1.0 + distance).powf(exponent)
         }
+        // Default to exponential decay (includes "exponential" and unknown curves)
         _ => (-falloff * distance).exp(),
     }
 }
 
 fn normalize_title_key(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
+    value.trim().to_lowercase()
 }
 
 impl GraphStore {

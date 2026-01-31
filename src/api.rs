@@ -76,9 +76,16 @@ pub fn graph_rank_candidates(
     swb::to_value(&ranked).map_err(|err| err.into())
 }
 
+const DEBUG_NODE_LIMIT: usize = 200;
+const DEBUG_EDGE_LIMIT: usize = 200;
+
 #[wasm_bindgen]
 pub fn graph_debug_dump() -> Result<JsValue, JsValue> {
-    let dump = GRAPH.with(|store| store.borrow().debug_dump(200, 200));
+    let dump = GRAPH.with(|store| {
+        store
+            .borrow()
+            .debug_dump(DEBUG_NODE_LIMIT, DEBUG_EDGE_LIMIT)
+    });
     Ok(JsValue::from_str(&dump))
 }
 

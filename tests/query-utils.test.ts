@@ -181,9 +181,7 @@ describe("escapeHtml", () => {
 
 describe("escapeRegExp", () => {
 	it("escapes regex special characters", () => {
-		expect(escapeRegExp("a.b*c?d+e[f]g")).toBe(
-			"a\\.b\\*c\\?d\\+e\\[f\\]g",
-		);
+		expect(escapeRegExp("a.b*c?d+e[f]g")).toBe("a\\.b\\*c\\?d\\+e\\[f\\]g");
 	});
 
 	it("handles string with no special chars", () => {
