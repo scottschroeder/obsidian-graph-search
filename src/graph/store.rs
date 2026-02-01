@@ -8,10 +8,7 @@ use petgraph::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{
-    algo::bfs_multi_source,
-    model::{EdgeInput, NodeData, NodeInput},
-};
+use super::model::{EdgeInput, NodeData, NodeInput};
 
 #[derive(Debug, Serialize)]
 pub(crate) struct GraphStats {
@@ -186,19 +183,19 @@ impl GraphStore {
         sources: &[NodeIndex],
         weights: &ScoreWeights,
     ) -> Vec<HashMap<NodeIndex, f32>> {
-        let degrees = self.degree_map();
         let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
-        let undirected = if use_weighted {
-            Some(self.graph.clone().into_edge_type::<Undirected>())
+        let degrees = if use_weighted {
+            Some(self.degree_map())
         } else {
             None
         };
+        let undirected = self.graph.clone().into_edge_type::<Undirected>();
 
         sources
             .iter()
             .map(|source| {
-                if let Some(graph) = undirected.as_ref() {
-                    dijkstra(graph, *source, None, |edge| {
+                dijkstra(&undirected, *source, None, |edge| {
+                    if let Some(degrees) = degrees.as_ref() {
                         let deg_a = *degrees.get(&edge.source()).unwrap_or(&0);
                         let deg_b = *degrees.get(&edge.target()).unwrap_or(&0);
                         let degree_sum = (deg_a + deg_b) as f32;
@@ -208,15 +205,12 @@ impl GraphStore {
                             1.0
                         };
                         base.powf(weights.connection_strength)
-                    })
-                    .into_iter()
-                    .collect()
-                } else {
-                    bfs_multi_source(&self.graph, &[*source])
-                        .into_iter()
-                        .map(|(node, distance)| (node, distance as f32))
-                        .collect()
-                }
+                    } else {
+                        1.0
+                    }
+                })
+                .into_iter()
+                .collect()
             })
             .collect()
     }
