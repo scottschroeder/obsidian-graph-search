@@ -4,11 +4,7 @@ import * as plugin from "./pkg/obsidian_rust_plugin";
 import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
 
 import { GraphQueryModal } from "./src/ui/query-modal";
-import type {
-	GraphStats,
-	SearchDocumentInput,
-	SearchStats,
-} from "./src/ui/types";
+import type { SearchDocumentInput } from "./src/ui/types";
 import {
 	buildDanglingGraphInput,
 	GraphEdgeInput,
@@ -93,7 +89,7 @@ export default class GraphSearchPlugin extends Plugin {
 		return this.settings.debugMode;
 	}
 
-	async buildGraphIndex(): Promise<GraphStats> {
+	async buildGraphIndex(): Promise<void> {
 		const files = this.app.vault.getMarkdownFiles();
 		const nodes: GraphNodeInput[] = files.map((file) => ({
 			title: file.basename,
@@ -115,10 +111,10 @@ export default class GraphSearchPlugin extends Plugin {
 		nodes.push(...dangling.nodes);
 		edges.push(...dangling.edges);
 
-		return plugin.graph_init(nodes, edges) as GraphStats;
+		await plugin.graph_init(nodes, edges);
 	}
 
-	async buildSearchIndex(): Promise<SearchStats> {
+	async buildSearchIndex(): Promise<void> {
 		const files = this.app.vault.getMarkdownFiles();
 		const docs: SearchDocumentInput[] = [];
 		this.searchContentByPath = new Map();
@@ -133,7 +129,7 @@ export default class GraphSearchPlugin extends Plugin {
 			});
 			this.searchContentByPath.set(file.path, body);
 		}
-		return plugin.search_index(docs) as SearchStats;
+		await plugin.search_index(docs);
 	}
 
 	getSearchContent(path: string): string {

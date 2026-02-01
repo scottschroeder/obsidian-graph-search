@@ -10,12 +10,6 @@ use serde::{Deserialize, Serialize};
 
 use super::model::{EdgeInput, NodeData, NodeInput};
 
-#[derive(Debug, Serialize)]
-pub(crate) struct GraphStats {
-    pub(crate) node_count: usize,
-    pub(crate) edge_count: usize,
-}
-
 use crate::models::CandidateInput;
 
 #[derive(Debug, Serialize)]
@@ -60,7 +54,7 @@ impl GraphStore {
         self.path_index.clear();
     }
 
-    pub(crate) fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) -> GraphStats {
+    pub(crate) fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) {
         self.clear();
 
         for node in nodes {
@@ -88,15 +82,6 @@ impl GraphStore {
             if let (Some(from), Some(to)) = (from, to) {
                 self.graph.add_edge(from, to, ());
             }
-        }
-
-        self.stats()
-    }
-
-    pub(crate) fn stats(&self) -> GraphStats {
-        GraphStats {
-            node_count: self.graph.node_count(),
-            edge_count: self.graph.edge_count(),
         }
     }
 
@@ -360,10 +345,10 @@ mod tests {
             to: "beta.md".to_string(),
         }];
 
-        let stats = store.build(nodes, edges);
+        store.build(nodes, edges);
 
-        assert_eq!(stats.node_count, 2);
-        assert_eq!(stats.edge_count, 1);
+        assert_eq!(store.graph.node_count(), 2);
+        assert_eq!(store.graph.edge_count(), 1);
         assert!(store.title_index.contains_key("alpha"));
         assert!(store.path_index.contains_key("beta.md"));
     }

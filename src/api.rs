@@ -35,15 +35,15 @@ pub fn graph_init(nodes: JsValue, edges: JsValue) -> Result<JsValue, JsValue> {
     let nodes: Vec<NodeInput> = swb::from_value(nodes)?;
     let edges: Vec<EdgeInput> = swb::from_value(edges)?;
 
-    let stats = GRAPH.with(|store| store.borrow_mut().build(nodes, edges));
-    swb::to_value(&stats).map_err(|err| err.into())
+    GRAPH.with(|store| store.borrow_mut().build(nodes, edges));
+    Ok(JsValue::NULL)
 }
 
 #[wasm_bindgen]
 pub fn search_index(docs: JsValue) -> Result<JsValue, JsValue> {
     let docs: Vec<SearchDocumentInput> = swb::from_value(docs)?;
-    let stats = SEARCH.with(|store| store.borrow_mut().build(docs));
-    swb::to_value(&stats).map_err(|err| err.into())
+    SEARCH.with(|store| store.borrow_mut().build(docs));
+    Ok(JsValue::NULL)
 }
 
 #[wasm_bindgen]

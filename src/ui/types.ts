@@ -1,8 +1,3 @@
-export type GraphStats = {
-	node_count: number;
-	edge_count: number;
-};
-
 export type QueryAtomKind = "term" | "near" | "tag" | "path" | "whitespace";
 
 export type QueryAtom = {
@@ -40,11 +35,6 @@ export type SearchDocumentInput = {
 	path: string;
 	body: string;
 	tags?: string[];
-};
-
-export type SearchStats = {
-	doc_count: number;
-	token_count: number;
 };
 
 export type DistanceEntry = {

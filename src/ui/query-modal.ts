@@ -29,8 +29,8 @@ import { openTitlePicker } from "./title-suggest";
 import { openTagPicker } from "./tag-suggest";
 
 type GraphSearchPluginApi = {
-	buildGraphIndex(): Promise<unknown>;
-	buildSearchIndex(): Promise<unknown>;
+	buildGraphIndex(): Promise<void>;
+	buildSearchIndex(): Promise<void>;
 	getSearchContent(path: string): string;
 	getScoreWeights(): ScoreWeights;
 	isDebugMode(): boolean;

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use super::tokenize::{extract_composite_tokens, tokenize};
 use crate::models::CandidateInput;
@@ -12,12 +12,6 @@ pub(crate) struct SearchDocumentInput {
     pub(crate) body: String,
     #[serde(default)]
     pub(crate) tags: Option<Vec<String>>,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct SearchStats {
-    pub(crate) doc_count: usize,
-    pub(crate) token_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -34,7 +28,6 @@ pub(crate) struct SearchStore {
     docs: Vec<SearchDocument>,
     index: HashMap<String, Vec<usize>>,
     sorted_tokens: Vec<String>,
-    token_count: usize,
 }
 
 impl SearchStore {
@@ -43,7 +36,6 @@ impl SearchStore {
             docs: Vec::new(),
             index: HashMap::new(),
             sorted_tokens: Vec::new(),
-            token_count: 0,
         }
     }
 
@@ -51,10 +43,9 @@ impl SearchStore {
         self.docs.clear();
         self.index.clear();
         self.sorted_tokens.clear();
-        self.token_count = 0;
     }
 
-    pub(crate) fn build(&mut self, docs: Vec<SearchDocumentInput>) -> SearchStats {
+    pub(crate) fn build(&mut self, docs: Vec<SearchDocumentInput>) {
         self.clear();
 
         for (doc_id, doc) in docs.into_iter().enumerate() {
@@ -97,7 +88,6 @@ impl SearchStore {
             };
             self.docs.push(document);
 
-            self.token_count += self.docs[doc_id].tokens.len();
             for token in self.docs[doc_id].tokens.iter().cloned() {
                 self.index.entry(token).or_default().push(doc_id);
             }
@@ -105,15 +95,6 @@ impl SearchStore {
 
         self.sorted_tokens = self.index.keys().cloned().collect();
         self.sorted_tokens.sort();
-
-        self.stats()
-    }
-
-    pub(crate) fn stats(&self) -> SearchStats {
-        SearchStats {
-            doc_count: self.docs.len(),
-            token_count: self.token_count,
-        }
     }
 
     pub(crate) fn search_structured(
