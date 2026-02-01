@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+};
 
 use petgraph::{
     algo::dijkstra,
@@ -241,15 +244,25 @@ impl GraphStore {
             return;
         }
 
-        let mut max_distance: f32 = 0.0;
-        let mut max_title: f32 = 0.0;
-        let mut max_body: f32 = 0.0;
+        let mut max_distance: Option<f32> = None;
+        let mut max_title: Option<f32> = None;
+        let mut max_body: Option<f32> = None;
 
         for entry in results.iter() {
-            max_distance = max_distance.max(entry.distance_score);
-            max_title = max_title.max(entry.title_score);
-            max_body = max_body.max(entry.body_score);
+            max_distance = max_distance
+                .map(|current| current.max(entry.distance_score))
+                .or(Some(entry.distance_score));
+            max_title = max_title
+                .map(|current| current.max(entry.title_score))
+                .or(Some(entry.title_score));
+            max_body = max_body
+                .map(|current| current.max(entry.body_score))
+                .or(Some(entry.body_score));
         }
+
+        let max_distance = max_distance.unwrap_or(0.0);
+        let max_title = max_title.unwrap_or(0.0);
+        let max_body = max_body.unwrap_or(0.0);
 
         for entry in results.iter_mut() {
             entry.distance_score = if max_distance.abs() < f32::EPSILON {
@@ -537,6 +550,54 @@ mod tests {
         let hub = by_path.get("hub.md").unwrap();
         let end = by_path.get("end.md").unwrap();
         assert!(hub.distance_score >= end.distance_score);
+    }
+
+    #[test]
+    fn normalize_scores_scales_and_defaults() {
+        let store = GraphStore::new();
+        let weights = ScoreWeights {
+            distance_weight: 1.0,
+            title_weight: 1.0,
+            body_weight: 1.0,
+            distance_falloff: 0.0,
+            connection_strength: 0.0,
+            distance_curve: "exponential".to_string(),
+        };
+        let mut results = vec![
+            ScoredCandidate {
+                title: "alpha".to_string(),
+                path: "alpha.md".to_string(),
+                distance_sum: 0.0,
+                distance_score: 2.0,
+                title_score: 4.0,
+                body_score: 0.0,
+                total_score: 0.0,
+            },
+            ScoredCandidate {
+                title: "beta".to_string(),
+                path: "beta.md".to_string(),
+                distance_sum: 0.0,
+                distance_score: 1.0,
+                title_score: 2.0,
+                body_score: 0.0,
+                total_score: 0.0,
+            },
+        ];
+
+        store.normalize_scores(&mut results, &weights);
+
+        let alpha = &results[0];
+        let beta = &results[1];
+
+        assert!((alpha.distance_score - 1.0).abs() < 1e-6);
+        assert!((alpha.title_score - 1.0).abs() < 1e-6);
+        assert!((alpha.body_score - 1.0).abs() < 1e-6);
+        assert!((alpha.total_score - 3.0).abs() < 1e-6);
+
+        assert!((beta.distance_score - 0.5).abs() < 1e-6);
+        assert!((beta.title_score - 0.5).abs() < 1e-6);
+        assert!((beta.body_score - 1.0).abs() < 1e-6);
+        assert!((beta.total_score - 2.0).abs() < 1e-6);
     }
 
     #[test]
