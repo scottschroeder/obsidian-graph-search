@@ -33,6 +33,7 @@ struct SearchDocument {
 pub(crate) struct SearchStore {
     docs: Vec<SearchDocument>,
     index: HashMap<String, Vec<usize>>,
+    sorted_tokens: Vec<String>,
     token_count: usize,
 }
 
@@ -41,6 +42,7 @@ impl SearchStore {
         Self {
             docs: Vec::new(),
             index: HashMap::new(),
+            sorted_tokens: Vec::new(),
             token_count: 0,
         }
     }
@@ -48,6 +50,7 @@ impl SearchStore {
     pub(crate) fn clear(&mut self) {
         self.docs.clear();
         self.index.clear();
+        self.sorted_tokens.clear();
         self.token_count = 0;
     }
 
@@ -99,6 +102,9 @@ impl SearchStore {
                 self.index.entry(token).or_default().push(doc_id);
             }
         }
+
+        self.sorted_tokens = self.index.keys().cloned().collect();
+        self.sorted_tokens.sort();
 
         self.stats()
     }
@@ -258,8 +264,17 @@ impl SearchStore {
             return HashSet::new();
         }
         let mut results = HashSet::new();
-        for (token, postings) in &self.index {
-            if token.starts_with(prefix) {
+        let start = match self
+            .sorted_tokens
+            .binary_search_by(|token| token.as_str().cmp(prefix))
+        {
+            Ok(index) | Err(index) => index,
+        };
+        for token in self.sorted_tokens.iter().skip(start) {
+            if !token.starts_with(prefix) {
+                break;
+            }
+            if let Some(postings) = self.index.get(token) {
                 results.extend(postings.iter().copied());
             }
         }
