@@ -60,22 +60,21 @@ impl SearchStore {
             let mut body_tokens = HashSet::new();
             let mut tags = HashSet::new();
 
-            for token in tokenize(&doc.title) {
-                tokens.insert(token.clone());
-                title_tokens.insert(token);
-            }
-            for token in extract_composite_tokens(&doc.title) {
-                tokens.insert(token.clone());
-                title_tokens.insert(token);
-            }
-            for token in tokenize(&doc.body) {
-                tokens.insert(token.clone());
-                body_tokens.insert(token);
-            }
-            for token in extract_composite_tokens(&doc.body) {
-                tokens.insert(token.clone());
-                body_tokens.insert(token);
-            }
+            let title_terms = tokenize(&doc.title);
+            tokens.extend(title_terms.iter().cloned());
+            title_tokens.extend(title_terms);
+
+            let title_composites = extract_composite_tokens(&doc.title);
+            tokens.extend(title_composites.iter().cloned());
+            title_tokens.extend(title_composites);
+
+            let body_terms = tokenize(&doc.body);
+            tokens.extend(body_terms.iter().cloned());
+            body_tokens.extend(body_terms);
+
+            let body_composites = extract_composite_tokens(&doc.body);
+            tokens.extend(body_composites.iter().cloned());
+            body_tokens.extend(body_composites);
 
             if let Some(input_tags) = doc.tags {
                 for tag in input_tags {
@@ -95,9 +94,8 @@ impl SearchStore {
             };
             self.docs.push(document);
 
-            let tokens_snapshot: Vec<String> = self.docs[doc_id].tokens.iter().cloned().collect();
-            self.token_count += tokens_snapshot.len();
-            for token in tokens_snapshot {
+            self.token_count += self.docs[doc_id].tokens.len();
+            for token in self.docs[doc_id].tokens.iter().cloned() {
                 self.index.entry(token).or_default().push(doc_id);
             }
         }

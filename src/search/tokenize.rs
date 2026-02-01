@@ -1,22 +1,20 @@
 use std::collections::HashSet;
 
-pub(crate) fn tokenize(text: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
+pub(crate) fn tokenize(text: &str) -> HashSet<String> {
+    let mut tokens = HashSet::new();
     let mut current = String::new();
 
     for ch in text.chars() {
         if is_token_char(ch, current.is_empty()) {
-            for c in ch.to_lowercase() {
-                current.push(c);
-            }
+            append_lowercase(&mut current, ch);
         } else if !current.is_empty() {
-            tokens.push(current);
+            tokens.insert(current);
             current = String::new();
         }
     }
 
     if !current.is_empty() {
-        tokens.push(current);
+        tokens.insert(current);
     }
 
     tokens
@@ -30,55 +28,51 @@ pub(crate) fn extract_composite_tokens(text: &str) -> HashSet<String> {
 
     for ch in text.chars() {
         if ch.is_alphanumeric() {
-            for c in ch.to_lowercase() {
-                current.push(c);
-            }
+            append_lowercase(&mut current, ch);
             has_alphanumeric = true;
             continue;
         }
 
         if is_composite_separator(ch) {
-            if current.is_empty() {
-                if is_prefix_separator(ch) {
-                    current.push(ch);
-                    has_separator = true;
-                    continue;
-                }
-                add_composite_token_if_valid(
-                    &mut tokens,
-                    &current,
-                    has_alphanumeric,
-                    has_separator,
-                );
-                current.clear();
-                has_separator = false;
-                has_alphanumeric = false;
-                continue;
-            }
-            current.push(ch);
-            has_separator = true;
+            handle_composite_separator(
+                ch,
+                &mut current,
+                &mut has_separator,
+                &mut has_alphanumeric,
+                &mut tokens,
+            );
             continue;
         }
 
-        add_composite_token_if_valid(&mut tokens, &current, has_alphanumeric, has_separator);
-        current.clear();
-        has_separator = false;
-        has_alphanumeric = false;
+        flush_composite_token(
+            &mut tokens,
+            &mut current,
+            &mut has_alphanumeric,
+            &mut has_separator,
+        );
     }
 
-    add_composite_token_if_valid(&mut tokens, &current, has_alphanumeric, has_separator);
+    flush_composite_token(
+        &mut tokens,
+        &mut current,
+        &mut has_alphanumeric,
+        &mut has_separator,
+    );
 
     tokens
+}
+
+fn append_lowercase(buffer: &mut String, ch: char) {
+    for c in ch.to_lowercase() {
+        buffer.push(c);
+    }
 }
 
 fn is_token_char(ch: char, is_start: bool) -> bool {
     if ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '/' {
         return true;
     }
-    if ch == '#' {
-        return is_start;
-    }
-    false
+    ch == '#' && is_start
 }
 
 fn is_composite_separator(ch: char) -> bool {
@@ -91,6 +85,38 @@ fn is_infix_separator(ch: char) -> bool {
 
 fn is_prefix_separator(ch: char) -> bool {
     matches!(ch, '$' | '/')
+}
+
+fn handle_composite_separator(
+    ch: char,
+    current: &mut String,
+    has_separator: &mut bool,
+    has_alphanumeric: &mut bool,
+    tokens: &mut HashSet<String>,
+) {
+    if current.is_empty() {
+        if is_prefix_separator(ch) {
+            current.push(ch);
+            *has_separator = true;
+        } else {
+            flush_composite_token(tokens, current, has_alphanumeric, has_separator);
+        }
+        return;
+    }
+    current.push(ch);
+    *has_separator = true;
+}
+
+fn flush_composite_token(
+    tokens: &mut HashSet<String>,
+    current: &mut String,
+    has_alphanumeric: &mut bool,
+    has_separator: &mut bool,
+) {
+    add_composite_token_if_valid(tokens, current, *has_alphanumeric, *has_separator);
+    current.clear();
+    *has_separator = false;
+    *has_alphanumeric = false;
 }
 
 fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -> bool {
@@ -176,14 +202,19 @@ mod tests {
     #[test]
     fn tokenize_basic_words() {
         let tokens = tokenize("Budget for Q3 meeting");
-        assert_eq!(tokens, vec!["budget", "for", "q3", "meeting"]);
+        let expected: HashSet<String> = ["budget", "for", "q3", "meeting"]
+            .iter()
+            .copied()
+            .map(String::from)
+            .collect();
+        assert_eq!(tokens, expected);
     }
 
     #[test]
     fn tokenize_tags_and_paths() {
         let tokens = tokenize("tag:#meeting path/to/file");
-        assert!(tokens.contains(&"tag".to_string()));
-        assert!(tokens.contains(&"#meeting".to_string()));
+        assert!(tokens.contains("tag"));
+        assert!(tokens.contains("#meeting"));
     }
 
     #[test]
@@ -233,9 +264,9 @@ mod tests {
     #[test]
     fn tokenize_unicode_characters() {
         let tokens = tokenize("Über café naïve");
-        assert!(tokens.contains(&"über".to_string()));
-        assert!(tokens.contains(&"café".to_string()));
-        assert!(tokens.contains(&"naïve".to_string()));
+        assert!(tokens.contains("über"));
+        assert!(tokens.contains("café"));
+        assert!(tokens.contains("naïve"));
     }
 
     #[test]
