@@ -116,13 +116,13 @@ impl SearchStore {
         }
     }
 
-    pub(crate) fn search(&self, query: &str) -> Vec<CandidateInput> {
-        let terms = query
-            .split_whitespace()
-            .filter(|term| !term.is_empty())
-            .collect::<Vec<_>>();
-
-        if terms.is_empty() {
+    pub(crate) fn search_structured(
+        &self,
+        terms: &[String],
+        tags: &[String],
+        paths: &[String],
+    ) -> Vec<CandidateInput> {
+        if terms.is_empty() && tags.is_empty() && paths.is_empty() {
             return self
                 .docs
                 .iter()
@@ -138,21 +138,42 @@ impl SearchStore {
         let mut candidate_ids: Option<HashSet<usize>> = None;
         let mut score_terms: HashSet<String> = HashSet::new();
 
-        for term in terms {
-            let cleaned = term.trim_matches('"');
+        for tag in tags {
+            let cleaned = tag.trim().trim_matches('"');
+            if cleaned.is_empty() {
+                continue;
+            }
+            let Some(normalized) = normalize_tag(cleaned) else {
+                continue;
+            };
+            let filtered = self.filter_by_tag(&normalized, candidate_ids.take());
+            if filtered.is_empty() {
+                return Vec::new();
+            }
+            candidate_ids = Some(filtered);
+        }
+
+        for path in paths {
+            let cleaned = path.trim().trim_matches('"');
             if cleaned.is_empty() {
                 continue;
             }
             let term_lower = cleaned.to_ascii_lowercase();
-            let filtered = if let Some(tag) = parse_tag_term(&term_lower) {
-                self.filter_by_tag(&tag, candidate_ids.take())
-            } else if let Some(path_term) = parse_path_term(&term_lower) {
-                self.filter_by_path(&path_term, candidate_ids.take())
-            } else {
-                score_terms.insert(term_lower.clone());
-                self.filter_by_token(&term_lower, candidate_ids.take())
-            };
+            let filtered = self.filter_by_path(&term_lower, candidate_ids.take());
+            if filtered.is_empty() {
+                return Vec::new();
+            }
+            candidate_ids = Some(filtered);
+        }
 
+        for term in terms {
+            let cleaned = term.trim().trim_matches('"');
+            if cleaned.is_empty() {
+                continue;
+            }
+            let term_lower = cleaned.to_ascii_lowercase();
+            score_terms.insert(term_lower.clone());
+            let filtered = self.filter_by_token(&term_lower, candidate_ids.take());
             if filtered.is_empty() {
                 return Vec::new();
             }
@@ -290,23 +311,6 @@ fn intersect_sets(current: Option<HashSet<usize>>, next: HashSet<usize>) -> Hash
     }
 }
 
-fn parse_tag_term(term: &str) -> Option<String> {
-    if term.starts_with("tag:") {
-        let value = term.trim_start_matches("tag:");
-        return normalize_tag(value);
-    }
-    if term.starts_with(":tag") {
-        let value = term.trim_start_matches(":tag");
-        if !value.is_empty() {
-            return normalize_tag(value);
-        }
-    }
-    if term.starts_with('#') && term.len() > 1 {
-        return normalize_tag(term);
-    }
-    None
-}
-
 fn normalize_tag(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -325,22 +329,10 @@ fn normalize_tag(raw: &str) -> Option<String> {
     }
 }
 
-fn parse_path_term(term: &str) -> Option<String> {
-    if term.starts_with("path:") {
-        return Some(term.trim_start_matches("path:").to_string());
-    }
-    if term.starts_with(":path") {
-        let value = term.trim_start_matches(":path");
-        if !value.is_empty() {
-            return Some(value.to_string());
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     fn build_store() -> SearchStore {
         let mut store = SearchStore::new();
@@ -364,7 +356,7 @@ mod tests {
     #[test]
     fn search_by_token() {
         let store = build_store();
-        let results = store.search("budget");
+        let results = store.search_structured(&["budget".to_string()], &[], &[]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "meetings/budget.md");
     }
@@ -379,7 +371,7 @@ mod tests {
             tags: Some(vec![]),
         }]);
 
-        let results = store.search("project");
+        let results = store.search_structured(&["project".to_string()], &[], &[]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "projects/plan.md");
     }
@@ -387,7 +379,7 @@ mod tests {
     #[test]
     fn search_by_tag() {
         let store = build_store();
-        let results = store.search("tag:meeting");
+        let results = store.search_structured(&[], &["meeting".to_string()], &[]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "meetings/budget.md");
     }
@@ -395,7 +387,7 @@ mod tests {
     #[test]
     fn search_by_path_term() {
         let store = build_store();
-        let results = store.search("path:projects");
+        let results = store.search_structured(&[], &[], &["projects".to_string()]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "projects/plan.md");
     }
@@ -418,7 +410,7 @@ mod tests {
             },
         ]);
 
-        let results = store.search("iterat");
+        let results = store.search_structured(&["iterat".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert!(paths.contains(&"notes/iterate.md".to_string()));
         assert!(paths.contains(&"notes/iterator.md".to_string()));
@@ -442,7 +434,7 @@ mod tests {
             },
         ]);
 
-        let results = store.search("iterator");
+        let results = store.search_structured(&["iterator".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert!(paths.contains(&"notes/iterator.md".to_string()));
         assert!(paths.contains(&"notes/iterators.md".to_string()));
@@ -466,7 +458,8 @@ mod tests {
             },
         ]);
 
-        let results = store.search("alpha iterator");
+        let results =
+            store.search_structured(&["alpha".to_string(), "iterator".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert_eq!(paths, vec!["notes/alpha-iterator.md".to_string()]);
     }
@@ -489,7 +482,7 @@ mod tests {
             },
         ]);
 
-        let results = store.search("app.mysite.com");
+        let results = store.search_structured(&["app.mysite.com".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert_eq!(paths, vec!["notes/app.md".to_string()]);
     }
@@ -504,7 +497,7 @@ mod tests {
             tags: Some(vec![]),
         }]);
 
-        let results = store.search("$PATH");
+        let results = store.search_structured(&["$PATH".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert_eq!(paths, vec!["notes/shell.md".to_string()]);
     }
@@ -519,7 +512,7 @@ mod tests {
             tags: Some(vec![]),
         }]);
 
-        let results = store.search("health:check");
+        let results = store.search_structured(&["health:check".to_string()], &[], &[]);
         let paths: Vec<String> = results.into_iter().map(|r| r.path).collect();
         assert_eq!(paths, vec!["notes/health.md".to_string()]);
     }
@@ -542,7 +535,7 @@ mod tests {
             },
         ]);
 
-        let results = store.search("tag:log/incident");
+        let results = store.search_structured(&[], &["log/incident".to_string()], &[]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "logs/tagged.md");
     }
@@ -550,7 +543,7 @@ mod tests {
     #[test]
     fn search_empty_query_returns_all_docs() {
         let store = build_store();
-        let results = store.search("");
+        let results = store.search_structured(&[], &[], &[]);
         assert_eq!(results.len(), 2);
         assert!(results
             .iter()
@@ -558,9 +551,9 @@ mod tests {
     }
 
     #[test]
-    fn search_by_colon_tag_prefix() {
+    fn search_by_hash_tag() {
         let store = build_store();
-        let results = store.search(":tag#meeting");
+        let results = store.search_structured(&[], &["#meeting".to_string()], &[]);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, "meetings/budget.md");
     }
@@ -568,10 +561,33 @@ mod tests {
     #[test]
     fn search_handles_only_whitespace_query() {
         let store = build_store();
-        let results = store.search("   ");
+        let results = store.search_structured(&[], &[], &[]);
         assert_eq!(results.len(), 2);
         assert!(results
             .iter()
             .all(|r| r.title_score == 0.0 && r.body_score == 0.0));
+    }
+
+    #[test]
+    fn filter_by_tag_with_current_candidates() {
+        let store = build_store();
+        let current: HashSet<usize> = std::iter::once(0usize).collect();
+
+        let matches = store.filter_by_tag("#meeting", Some(current));
+        let expected: HashSet<usize> = std::iter::once(0usize).collect();
+        assert_eq!(matches, expected);
+    }
+
+    #[test]
+    fn filter_by_path_with_current_candidates() {
+        let store = build_store();
+        let current: HashSet<usize> = std::iter::once(0usize).collect();
+
+        let matches = store.filter_by_path("projects", Some(current));
+        assert!(matches.is_empty());
+
+        let matches = store.filter_by_path("projects", None);
+        let expected: HashSet<usize> = std::iter::once(1usize).collect();
+        assert_eq!(matches, expected);
     }
 }

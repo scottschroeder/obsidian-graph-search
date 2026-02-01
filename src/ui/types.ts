@@ -3,23 +3,11 @@ export type GraphStats = {
 	edge_count: number;
 };
 
-export type ParsedQuery = {
-	near_titles: string[];
-	base_query: string;
-};
-
 export type QueryAtomKind = "term" | "near" | "tag" | "path" | "whitespace";
 
 export type QueryAtom = {
 	kind: QueryAtomKind;
 	value: string;
-};
-
-export type CandidateInput = {
-	title: string;
-	path: string;
-	title_score: number;
-	body_score: number;
 };
 
 export type ScoredCandidate = {
@@ -30,6 +18,12 @@ export type ScoredCandidate = {
 	title_score: number;
 	body_score: number;
 	total_score: number;
+};
+
+export type GraphQueryResult = {
+	results: ScoredCandidate[];
+	candidate_count: number;
+	near_titles: string[];
 };
 
 export type ScoreWeights = {

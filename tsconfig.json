@@ -14,6 +14,6 @@
 		"allowSyntheticDefaultImports": true,
 		"lib": ["DOM", "ES5", "ES6", "ES7"]
 	},
-	"include": ["**/*.ts"],
+	"include": ["**/*.ts", "**/*.d.ts"],
 	"exclude": ["pkg/**/*.wasm.d.ts"]
 }

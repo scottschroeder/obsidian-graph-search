@@ -16,15 +16,19 @@ pub(crate) struct QueryAtom {
     pub(crate) value: String,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct ParsedQuery {
+#[derive(Debug)]
+pub(crate) struct AtomQuery {
     pub(crate) near_titles: Vec<String>,
-    pub(crate) base_query: String,
+    pub(crate) terms: Vec<String>,
+    pub(crate) tags: Vec<String>,
+    pub(crate) paths: Vec<String>,
 }
 
-pub(crate) fn parse_query_atoms(atoms: &[QueryAtom]) -> ParsedQuery {
+pub(crate) fn partition_atoms(atoms: &[QueryAtom]) -> AtomQuery {
     let mut near_titles = Vec::new();
-    let mut base_tokens = Vec::new();
+    let mut terms = Vec::new();
+    let mut tags = Vec::new();
+    let mut paths = Vec::new();
 
     for atom in atoms {
         let trimmed = atom.value.trim();
@@ -32,25 +36,19 @@ pub(crate) fn parse_query_atoms(atoms: &[QueryAtom]) -> ParsedQuery {
             continue;
         }
         match atom.kind {
-            QueryAtomKind::Near => {
-                near_titles.push(trimmed.to_string());
-            }
-            QueryAtomKind::Tag => {
-                base_tokens.push(format!("tag:{}", trimmed));
-            }
-            QueryAtomKind::Path => {
-                base_tokens.push(format!("path:{}", trimmed));
-            }
+            QueryAtomKind::Near => near_titles.push(trimmed.to_string()),
+            QueryAtomKind::Tag => tags.push(trimmed.to_string()),
+            QueryAtomKind::Path => paths.push(trimmed.to_string()),
             QueryAtomKind::Whitespace => {}
-            QueryAtomKind::Term => {
-                base_tokens.push(trimmed.to_string());
-            }
+            QueryAtomKind::Term => terms.push(trimmed.to_string()),
         }
     }
 
-    ParsedQuery {
+    AtomQuery {
         near_titles,
-        base_query: base_tokens.join(" "),
+        terms,
+        tags,
+        paths,
     }
 }
 
@@ -59,7 +57,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_query_atoms_builds_base_and_near() {
+    fn partition_atoms_splits_near_and_filters() {
         let atoms = vec![
             QueryAtom {
                 kind: QueryAtomKind::Near,
@@ -85,10 +83,16 @@ mod tests {
                 kind: QueryAtomKind::Term,
                 value: "deadline".to_string(),
             },
+            QueryAtom {
+                kind: QueryAtomKind::Path,
+                value: "projects".to_string(),
+            },
         ];
 
-        let parsed = parse_query_atoms(&atoms);
+        let parsed = partition_atoms(&atoms);
         assert_eq!(parsed.near_titles, vec!["My Note"]);
-        assert_eq!(parsed.base_query, "budget tag:#meeting deadline");
+        assert_eq!(parsed.terms, vec!["budget", "deadline"]);
+        assert_eq!(parsed.tags, vec!["#meeting"]);
+        assert_eq!(parsed.paths, vec!["projects"]);
     }
 }

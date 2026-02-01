@@ -77,53 +77,11 @@ export function formatTagValue(value: string): string {
 	return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
 }
 
-export function extractSearchTerms(baseQuery: string): string[] {
-	return baseQuery
-		.split(/\s+/)
-		.map((term) => term.trim())
-		.filter((term) => term.length > 0)
-		.map((term) => {
-			if (term.startsWith(":tag")) {
-				return term.slice(4);
-			}
-			if (term.startsWith("tag:")) {
-				return term.slice(4);
-			}
-			if (term.startsWith(":path")) {
-				return term.slice(5);
-			}
-			if (term.startsWith("path:")) {
-				return term.slice(5);
-			}
-			return term;
-		})
+export function extractBodyTermsFromAtoms(atoms: QueryAtom[]): string[] {
+	return atoms
+		.filter((atom) => atom.kind === "term")
+		.map((atom) => atom.value.trim())
 		.filter((term) => term.length > 0);
-}
-
-export function extractBodyTerms(baseQuery: string): string[] {
-	return baseQuery
-		.split(/\s+/)
-		.map((term) => term.trim())
-		.filter((term) => term.length > 0)
-		.filter((term) => {
-			const lowered = term.toLowerCase();
-			if (lowered.startsWith(":tag")) {
-				return false;
-			}
-			if (lowered.startsWith("tag:")) {
-				return false;
-			}
-			if (lowered.startsWith(":path")) {
-				return false;
-			}
-			if (lowered.startsWith("path:")) {
-				return false;
-			}
-			if (lowered.startsWith("#")) {
-				return false;
-			}
-			return true;
-		});
 }
 
 export { stripMdExtension };

@@ -5,7 +5,6 @@ import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
 
 import { GraphQueryModal } from "./src/ui/query-modal";
 import type {
-	CandidateInput,
 	GraphStats,
 	SearchDocumentInput,
 	SearchStats,

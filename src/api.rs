@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use serde::Serialize;
 use serde_wasm_bindgen as swb;
 use wasm_bindgen::prelude::*;
 
@@ -8,10 +9,16 @@ use crate::{
         model::{EdgeInput, NodeInput},
         store::{GraphStore, ScoreWeights, ScoredCandidate},
     },
-    models::CandidateInput,
     query,
     search::{SearchDocumentInput, SearchStore},
 };
+
+#[derive(Debug, Serialize)]
+struct GraphQueryResult {
+    results: Vec<ScoredCandidate>,
+    candidate_count: usize,
+    near_titles: Vec<String>,
+}
 
 // Global WASM-side singletons to avoid re-allocating stores per call.
 // In the JS/WASM environment, these thread-local stores live for the lifetime
@@ -33,30 +40,6 @@ pub fn graph_init(nodes: JsValue, edges: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn parse_query_atoms(atoms: JsValue) -> Result<JsValue, JsValue> {
-    let atoms: Vec<query::QueryAtom> = swb::from_value(atoms)?;
-    let parsed = query::parse_query_atoms(&atoms);
-    swb::to_value(&parsed).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
-pub fn graph_rank_candidates(
-    near_titles: JsValue,
-    candidates: JsValue,
-    weights: JsValue,
-) -> Result<JsValue, JsValue> {
-    let near_titles: Vec<String> = swb::from_value(near_titles)?;
-    let candidates: Vec<CandidateInput> = swb::from_value(candidates)?;
-    let weights: ScoreWeights = swb::from_value(weights)?;
-    let ranked: Vec<ScoredCandidate> = GRAPH.with(|store| {
-        store
-            .borrow()
-            .rank_candidates(near_titles, candidates, weights)
-    });
-    swb::to_value(&ranked).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
 pub fn search_index(docs: JsValue) -> Result<JsValue, JsValue> {
     let docs: Vec<SearchDocumentInput> = swb::from_value(docs)?;
     let stats = SEARCH.with(|store| store.borrow_mut().build(docs));
@@ -64,9 +47,30 @@ pub fn search_index(docs: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn search_candidates(base_query: String) -> Result<JsValue, JsValue> {
-    let results: Vec<CandidateInput> = SEARCH.with(|store| store.borrow().search(&base_query));
-    swb::to_value(&results).map_err(|err| err.into())
+pub fn graph_query_from_atoms(atoms: JsValue, weights: JsValue) -> Result<JsValue, JsValue> {
+    let atoms: Vec<query::QueryAtom> = swb::from_value(atoms)?;
+    let weights: ScoreWeights = swb::from_value(weights)?;
+    let parsed = query::partition_atoms(&atoms);
+
+    let candidates = SEARCH.with(|store| {
+        store
+            .borrow()
+            .search_structured(&parsed.terms, &parsed.tags, &parsed.paths)
+    });
+    let candidate_count = candidates.len();
+    let near_titles = parsed.near_titles.clone();
+    let ranked: Vec<ScoredCandidate> = GRAPH.with(|store| {
+        store
+            .borrow()
+            .rank_candidates(parsed.near_titles, candidates, weights)
+    });
+
+    let result = GraphQueryResult {
+        results: ranked,
+        candidate_count,
+        near_titles,
+    };
+    swb::to_value(&result).map_err(|err| err.into())
 }
 
 #[wasm_bindgen]

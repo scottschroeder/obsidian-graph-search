@@ -5,6 +5,4 @@ mod obsidian;
 mod query;
 mod search;
 
-pub use api::{
-    graph_init, graph_rank_candidates, parse_query_atoms, search_candidates, search_index,
-};
+pub use api::{cleanup_all, graph_init, graph_query_from_atoms, search_index};

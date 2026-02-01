@@ -3,15 +3,14 @@ import { App, Modal, Notice, TFile } from "obsidian";
 import * as wasm from "../../pkg/obsidian_rust_plugin";
 
 import type {
-	CandidateInput,
-	ParsedQuery,
+	GraphQueryResult,
 	QueryAtom,
 	ScoredCandidate,
 	ScoreWeights,
 } from "./types";
 import {
 	buildRawFromAtoms,
-	extractBodyTerms,
+	extractBodyTermsFromAtoms,
 	formatNearValue,
 	formatTagValue,
 	isColonInsert,
@@ -259,22 +258,22 @@ export class GraphQueryModal extends Modal {
 				await this.plugin.buildSearchIndex();
 				this.searchReady = true;
 			}
-			const parsed = wasm.parse_query_atoms(this.atoms) as ParsedQuery;
-			const candidates = (await wasm.search_candidates(
-				parsed.base_query,
-			)) as CandidateInput[];
-			const scored = (await wasm.graph_rank_candidates(
-				parsed.near_titles,
-				candidates,
+			const response = (await wasm.graph_query_from_atoms(
+				this.atoms,
 				this.plugin.getScoreWeights(),
-			)) as ScoredCandidate[];
+			)) as GraphQueryResult;
+			const scored = response.results as ScoredCandidate[];
 
 			this.results = scored;
 			this.selectedIndex = scored.length > 0 ? 0 : -1;
-			this.lastCandidateCount = candidates.length;
-			this.lastNearTitles = parsed.near_titles;
-			this.lastSearchTerms = extractBodyTerms(parsed.base_query);
-			this.renderResults(scored, candidates.length, parsed.near_titles);
+			this.lastCandidateCount = response.candidate_count;
+			this.lastNearTitles = response.near_titles;
+			this.lastSearchTerms = extractBodyTermsFromAtoms(this.atoms);
+			this.renderResults(
+				scored,
+				response.candidate_count,
+				response.near_titles,
+			);
 		} catch (error) {
 			console.error("Graph query failed", error);
 			new Notice("Graph query failed; see console");
