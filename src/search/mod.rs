@@ -1,4 +1,4 @@
-pub mod index;
-pub mod tokenize;
+pub(crate) mod index;
+pub(crate) mod tokenize;
 
-pub use index::{SearchDocumentInput, SearchStore};
+pub(crate) use index::{SearchDocumentInput, SearchStore};

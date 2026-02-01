@@ -6,13 +6,18 @@ use wasm_bindgen::prelude::*;
 use crate::{
     graph::{
         model::{EdgeInput, NodeInput},
-        store::{DistanceEntry, GraphStore, ScoreWeights, ScoredCandidate},
+        store::{GraphStore, ScoreWeights, ScoredCandidate},
     },
     models::CandidateInput,
     query,
     search::{SearchDocumentInput, SearchStore},
 };
 
+// Global WASM-side singletons to avoid re-allocating stores per call.
+// In the JS/WASM environment, these thread-local stores live for the lifetime
+// of the WASM module instance. That means the data persists across multiple
+// JS invocations within the same plugin session, and is reset only when the
+// module is reloaded (plugin reload, page refresh, or explicit cleanup).
 thread_local! {
     static GRAPH: RefCell<GraphStore> = RefCell::new(GraphStore::new());
     static SEARCH: RefCell<SearchStore> = RefCell::new(SearchStore::new());
@@ -28,35 +33,10 @@ pub fn graph_init(nodes: JsValue, edges: JsValue) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn graph_stats() -> Result<JsValue, JsValue> {
-    let stats = GRAPH.with(|store| store.borrow().stats());
-    swb::to_value(&stats).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
-pub fn graph_distances_from_title(title: String) -> Result<JsValue, JsValue> {
-    let entries: Vec<DistanceEntry> =
-        GRAPH.with(|store| store.borrow().distances_from_title(&title));
-    swb::to_value(&entries).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
-pub fn parse_query(raw: String) -> Result<JsValue, JsValue> {
-    let parsed = query::parse_query(&raw);
-    swb::to_value(&parsed).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
 pub fn parse_query_atoms(atoms: JsValue) -> Result<JsValue, JsValue> {
     let atoms: Vec<query::QueryAtom> = swb::from_value(atoms)?;
     let parsed = query::parse_query_atoms(&atoms);
     swb::to_value(&parsed).map_err(|err| err.into())
-}
-
-#[wasm_bindgen]
-pub fn parse_query_layout(raw: String) -> Result<JsValue, JsValue> {
-    let layout = query::parse_query_layout(&raw);
-    swb::to_value(&layout).map_err(|err| err.into())
 }
 
 #[wasm_bindgen]
@@ -74,19 +54,6 @@ pub fn graph_rank_candidates(
             .rank_candidates(near_titles, candidates, weights)
     });
     swb::to_value(&ranked).map_err(|err| err.into())
-}
-
-const DEBUG_NODE_LIMIT: usize = 200;
-const DEBUG_EDGE_LIMIT: usize = 200;
-
-#[wasm_bindgen]
-pub fn graph_debug_dump() -> Result<JsValue, JsValue> {
-    let dump = GRAPH.with(|store| {
-        store
-            .borrow()
-            .debug_dump(DEBUG_NODE_LIMIT, DEBUG_EDGE_LIMIT)
-    });
-    Ok(JsValue::from_str(&dump))
 }
 
 #[wasm_bindgen]

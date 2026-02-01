@@ -7,7 +7,7 @@ use petgraph::{
 
 use super::model::NodeData;
 
-pub fn bfs_multi_source(
+pub(crate) fn bfs_multi_source(
     graph: &Graph<NodeData, ()>,
     sources: &[NodeIndex],
 ) -> HashMap<NodeIndex, usize> {

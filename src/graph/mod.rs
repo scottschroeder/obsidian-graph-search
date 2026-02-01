@@ -1,3 +1,3 @@
-pub mod algo;
-pub mod model;
-pub mod store;
+pub(crate) mod algo;
+pub(crate) mod model;
+pub(crate) mod store;

@@ -7,7 +7,6 @@ use petgraph::{
     Undirected,
 };
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use super::{
     algo::bfs_multi_source,
@@ -15,62 +14,42 @@ use super::{
 };
 
 #[derive(Debug, Serialize)]
-pub struct GraphStats {
-    pub node_count: usize,
-    pub edge_count: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DistanceEntry {
-    pub title: String,
-    pub path: String,
-    pub distance: Option<usize>,
+pub(crate) struct GraphStats {
+    pub(crate) node_count: usize,
+    pub(crate) edge_count: usize,
 }
 
 use crate::models::CandidateInput;
 
 #[derive(Debug, Serialize)]
-pub struct ScoredCandidate {
-    pub title: String,
-    pub path: String,
-    pub distance_sum: f32,
-    pub distance_score: f32,
-    pub title_score: f32,
-    pub body_score: f32,
-    pub total_score: f32,
+pub(crate) struct ScoredCandidate {
+    pub(crate) title: String,
+    pub(crate) path: String,
+    pub(crate) distance_sum: f32,
+    pub(crate) distance_score: f32,
+    pub(crate) title_score: f32,
+    pub(crate) body_score: f32,
+    pub(crate) total_score: f32,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ScoreWeights {
-    pub distance_weight: f32,
-    pub title_weight: f32,
-    pub body_weight: f32,
-    pub distance_falloff: f32,
-    pub connection_strength: f32,
-    pub distance_curve: String,
+pub(crate) struct ScoreWeights {
+    pub(crate) distance_weight: f32,
+    pub(crate) title_weight: f32,
+    pub(crate) body_weight: f32,
+    pub(crate) distance_falloff: f32,
+    pub(crate) connection_strength: f32,
+    pub(crate) distance_curve: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct DebugEdge {
-    pub from: String,
-    pub to: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GraphDebugDump {
-    pub stats: GraphStats,
-    pub nodes: Vec<NodeData>,
-    pub edges: Vec<DebugEdge>,
-}
-
-pub struct GraphStore {
+pub(crate) struct GraphStore {
     graph: Graph<NodeData, ()>,
     title_index: HashMap<String, NodeIndex>,
     path_index: HashMap<String, NodeIndex>,
 }
 
 impl GraphStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             graph: Graph::new(),
             title_index: HashMap::new(),
@@ -78,13 +57,13 @@ impl GraphStore {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.graph = Graph::new();
         self.title_index.clear();
         self.path_index.clear();
     }
 
-    pub fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) -> GraphStats {
+    pub(crate) fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) -> GraphStats {
         self.clear();
 
         for node in nodes {
@@ -116,49 +95,14 @@ impl GraphStore {
         self.stats()
     }
 
-    pub fn stats(&self) -> GraphStats {
+    pub(crate) fn stats(&self) -> GraphStats {
         GraphStats {
             node_count: self.graph.node_count(),
             edge_count: self.graph.edge_count(),
         }
     }
 
-    pub fn distances_from_title(&self, title: &str) -> Vec<DistanceEntry> {
-        let title_key = normalize_title_key(title);
-        let sources = if let Some(node) = self.title_index.get(&title_key).copied() {
-            vec![node]
-        } else if let Some(node) = self.path_index.get(title).copied() {
-            vec![node]
-        } else if let Some(node) = self.path_index.get(&path_with_md(title)).copied() {
-            vec![node]
-        } else {
-            Vec::new()
-        };
-
-        let distances = if sources.is_empty() {
-            HashMap::new()
-        } else {
-            bfs_multi_source(&self.graph, &sources)
-        };
-
-        let mut entries: Vec<DistanceEntry> = self
-            .graph
-            .node_indices()
-            .map(|index| {
-                let node = &self.graph[index];
-                DistanceEntry {
-                    title: node.title.clone(),
-                    path: node.path.clone(),
-                    distance: distances.get(&index).copied(),
-                }
-            })
-            .collect();
-
-        entries.sort_by_key(|entry| entry.distance.unwrap_or(usize::MAX));
-        entries
-    }
-
-    pub fn rank_candidates(
+    pub(crate) fn rank_candidates(
         &self,
         near_titles: Vec<String>,
         candidates: Vec<CandidateInput>,
@@ -265,34 +209,6 @@ impl GraphStore {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         results
-    }
-
-    pub fn debug_dump(&self, node_limit: usize, edge_limit: usize) -> String {
-        let nodes = self
-            .graph
-            .node_indices()
-            .take(node_limit)
-            .map(|index| self.graph[index].clone())
-            .collect();
-
-        let edges = self
-            .graph
-            .edge_references()
-            .take(edge_limit)
-            .map(|edge| {
-                let from = self.graph[edge.source()].path.clone();
-                let to = self.graph[edge.target()].path.clone();
-                DebugEdge { from, to }
-            })
-            .collect();
-
-        let dump = GraphDebugDump {
-            stats: self.stats(),
-            nodes,
-            edges,
-        };
-
-        serde_json::to_string_pretty(&dump).unwrap_or_else(|_| "{}".to_string())
     }
 }
 
@@ -416,70 +332,6 @@ mod tests {
         assert_eq!(stats.edge_count, 1);
         assert!(store.title_index.contains_key("alpha"));
         assert!(store.path_index.contains_key("beta.md"));
-    }
-
-    #[test]
-    fn distances_from_title_returns_sorted_entries() {
-        let mut store = GraphStore::new();
-        let nodes = vec![
-            NodeInput {
-                title: "alpha".to_string(),
-                path: "alpha.md".to_string(),
-            },
-            NodeInput {
-                title: "beta".to_string(),
-                path: "beta.md".to_string(),
-            },
-            NodeInput {
-                title: "gamma".to_string(),
-                path: "gamma.md".to_string(),
-            },
-        ];
-        let edges = vec![
-            EdgeInput {
-                from: "alpha.md".to_string(),
-                to: "beta.md".to_string(),
-            },
-            EdgeInput {
-                from: "beta.md".to_string(),
-                to: "gamma.md".to_string(),
-            },
-        ];
-
-        store.build(nodes, edges);
-        let entries = store.distances_from_title("alpha");
-
-        assert_eq!(
-            entries.first().map(|entry| entry.title.as_str()),
-            Some("alpha")
-        );
-        assert_eq!(
-            entries.get(1).map(|entry| entry.title.as_str()),
-            Some("beta")
-        );
-    }
-
-    #[test]
-    fn duplicate_titles_use_path_key() {
-        let mut store = GraphStore::new();
-        let nodes = vec![
-            NodeInput {
-                title: "alpha".to_string(),
-                path: "alpha.md".to_string(),
-            },
-            NodeInput {
-                title: "alpha".to_string(),
-                path: "folder/alpha.md".to_string(),
-            },
-        ];
-
-        store.build(nodes, Vec::new());
-
-        let entries = store.distances_from_title("folder/alpha.md");
-        assert_eq!(
-            entries.first().map(|entry| entry.path.as_str()),
-            Some("folder/alpha.md")
-        );
     }
 
     #[test]

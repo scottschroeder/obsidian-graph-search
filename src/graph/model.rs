@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
-pub struct NodeData {
-    pub title: String,
-    pub path: String,
+pub(crate) struct NodeData {
+    pub(crate) title: String,
+    pub(crate) path: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct NodeInput {
-    pub title: String,
-    pub path: String,
+pub(crate) struct NodeInput {
+    pub(crate) title: String,
+    pub(crate) path: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EdgeInput {
-    pub from: String,
-    pub to: String,
+pub(crate) struct EdgeInput {
+    pub(crate) from: String,
+    pub(crate) to: String,
 }

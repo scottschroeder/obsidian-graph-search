@@ -6,18 +6,18 @@ use super::tokenize::{extract_composite_tokens, tokenize};
 use crate::models::CandidateInput;
 
 #[derive(Debug, Deserialize)]
-pub struct SearchDocumentInput {
-    pub title: String,
-    pub path: String,
-    pub body: String,
+pub(crate) struct SearchDocumentInput {
+    pub(crate) title: String,
+    pub(crate) path: String,
+    pub(crate) body: String,
     #[serde(default)]
-    pub tags: Option<Vec<String>>,
+    pub(crate) tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct SearchStats {
-    pub doc_count: usize,
-    pub token_count: usize,
+pub(crate) struct SearchStats {
+    pub(crate) doc_count: usize,
+    pub(crate) token_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -30,14 +30,14 @@ struct SearchDocument {
     tags: HashSet<String>,
 }
 
-pub struct SearchStore {
+pub(crate) struct SearchStore {
     docs: Vec<SearchDocument>,
     index: HashMap<String, Vec<usize>>,
     token_count: usize,
 }
 
 impl SearchStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             docs: Vec::new(),
             index: HashMap::new(),
@@ -45,13 +45,13 @@ impl SearchStore {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.docs.clear();
         self.index.clear();
         self.token_count = 0;
     }
 
-    pub fn build(&mut self, docs: Vec<SearchDocumentInput>) -> SearchStats {
+    pub(crate) fn build(&mut self, docs: Vec<SearchDocumentInput>) -> SearchStats {
         self.clear();
 
         for (doc_id, doc) in docs.into_iter().enumerate() {
@@ -105,14 +105,14 @@ impl SearchStore {
         self.stats()
     }
 
-    pub fn stats(&self) -> SearchStats {
+    pub(crate) fn stats(&self) -> SearchStats {
         SearchStats {
             doc_count: self.docs.len(),
             token_count: self.token_count,
         }
     }
 
-    pub fn search(&self, query: &str) -> Vec<CandidateInput> {
+    pub(crate) fn search(&self, query: &str) -> Vec<CandidateInput> {
         let terms = query
             .split_whitespace()
             .filter(|term| !term.is_empty())
@@ -208,8 +208,20 @@ impl SearchStore {
     }
 
     fn filter_by_tag(&self, tag: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
-        let base = current.unwrap_or_else(|| (0..self.docs.len()).collect());
-        base.into_iter()
+        if let Some(current) = current {
+            self.filter_options_by_tag(tag, current.into_iter())
+        } else {
+            self.filter_options_by_tag(tag, 0..self.docs.len())
+        }
+    }
+
+    fn filter_options_by_tag(
+        &self,
+        tag: &str,
+        nodes: impl Iterator<Item = usize>,
+    ) -> HashSet<usize> {
+        nodes
+            .into_iter()
             .filter(|id| {
                 self.docs
                     .get(*id)
@@ -220,8 +232,20 @@ impl SearchStore {
     }
 
     fn filter_by_path(&self, term: &str, current: Option<HashSet<usize>>) -> HashSet<usize> {
-        let base = current.unwrap_or_else(|| (0..self.docs.len()).collect());
-        base.into_iter()
+        if let Some(current) = current {
+            self.filter_options_by_path(term, current.into_iter())
+        } else {
+            self.filter_options_by_path(term, 0..self.docs.len())
+        }
+    }
+
+    fn filter_options_by_path(
+        &self,
+        term: &str,
+        nodes: impl Iterator<Item = usize>,
+    ) -> HashSet<usize> {
+        nodes
+            .into_iter()
             .filter(|id| {
                 self.docs
                     .get(*id)

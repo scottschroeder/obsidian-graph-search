@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-pub fn tokenize(text: &str) -> Vec<String> {
+pub(crate) fn tokenize(text: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
 
@@ -22,18 +22,18 @@ pub fn tokenize(text: &str) -> Vec<String> {
     tokens
 }
 
-pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
+pub(crate) fn extract_composite_tokens(text: &str) -> HashSet<String> {
     let mut tokens = HashSet::new();
     let mut current = String::new();
     let mut has_separator = false;
-    let mut has_alnum = false;
+    let mut has_alphanumeric = false;
 
     for ch in text.chars() {
         if ch.is_alphanumeric() {
             for c in ch.to_lowercase() {
                 current.push(c);
             }
-            has_alnum = true;
+            has_alphanumeric = true;
             continue;
         }
 
@@ -44,10 +44,15 @@ pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
                     has_separator = true;
                     continue;
                 }
-                add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
+                add_composite_token_if_valid(
+                    &mut tokens,
+                    &current,
+                    has_alphanumeric,
+                    has_separator,
+                );
                 current.clear();
                 has_separator = false;
-                has_alnum = false;
+                has_alphanumeric = false;
                 continue;
             }
             current.push(ch);
@@ -55,13 +60,13 @@ pub fn extract_composite_tokens(text: &str) -> HashSet<String> {
             continue;
         }
 
-        add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
+        add_composite_token_if_valid(&mut tokens, &current, has_alphanumeric, has_separator);
         current.clear();
         has_separator = false;
-        has_alnum = false;
+        has_alphanumeric = false;
     }
 
-    add_composite_token_if_valid(&mut tokens, &current, has_alnum, has_separator);
+    add_composite_token_if_valid(&mut tokens, &current, has_alphanumeric, has_separator);
 
     tokens
 }
