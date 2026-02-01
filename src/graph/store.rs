@@ -74,13 +74,14 @@ impl GraphStore {
                 title_key = normalize_title_key(&title);
             }
 
+            let path_key = node.path.clone();
             let data = NodeData {
                 title,
                 path: node.path,
             };
-            let index = self.graph.add_node(data.clone());
+            let index = self.graph.add_node(data);
 
-            self.path_index.insert(data.path.clone(), index);
+            self.path_index.insert(path_key, index);
             self.title_index.insert(title_key, index);
         }
 
@@ -108,100 +109,24 @@ impl GraphStore {
         candidates: Vec<CandidateInput>,
         weights: ScoreWeights,
     ) -> Vec<ScoredCandidate> {
-        let mut results = Vec::new();
-
         if near_titles.is_empty() {
-            results = candidates
-                .into_iter()
-                .map(|candidate| ScoredCandidate {
-                    title: candidate.title,
-                    path: candidate.path,
-                    distance_sum: 0.0,
-                    distance_score: 0.0,
-                    title_score: candidate.title_score,
-                    body_score: candidate.body_score,
-                    total_score: 0.0,
-                })
-                .collect();
-        } else {
-            let mut sources = Vec::new();
-            for near in near_titles {
-                if let Some(source) = self.resolve_near(&near) {
-                    sources.push(source);
-                } else {
-                    return Vec::new();
-                }
-            }
-
-            let degrees = self.degree_map();
-            let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
-            let undirected = if use_weighted {
-                Some(self.graph.clone().into_edge_type::<Undirected>())
-            } else {
-                None
-            };
-            let distance_maps: Vec<_> = sources
-                .iter()
-                .map(|source| {
-                    if let Some(graph) = undirected.as_ref() {
-                        dijkstra(graph, *source, None, |edge| {
-                            let deg_a = *degrees.get(&edge.source()).unwrap_or(&0);
-                            let deg_b = *degrees.get(&edge.target()).unwrap_or(&0);
-                            let degree_sum = (deg_a + deg_b) as f32;
-                            let base = if degree_sum > 0.0 {
-                                degree_sum / 2.0
-                            } else {
-                                1.0
-                            };
-                            base.powf(weights.connection_strength)
-                        })
-                    } else {
-                        bfs_multi_source(&self.graph, &[*source])
-                            .into_iter()
-                            .map(|(node, distance)| (node, distance as f32))
-                            .collect()
-                    }
-                })
-                .collect();
-
-            for candidate in candidates {
-                let Some(node) = self.path_index.get(&candidate.path).copied() else {
-                    continue;
-                };
-
-                let mut total = 0.0f32;
-                let mut missing = false;
-                for map in &distance_maps {
-                    if let Some(distance) = map.get(&node) {
-                        total += distance;
-                    } else {
-                        missing = true;
-                        break;
-                    }
-                }
-
-                if !missing {
-                    // Subtracting 1 treats direct neighbors (distance=1) the same as
-                    // the source node itself (distance=0), since both represent immediate context.
-                    let effective_distance = (total - 1.0).max(0.0);
-                    let distance_score = score_distance(
-                        effective_distance,
-                        weights.distance_falloff,
-                        &weights.distance_curve,
-                    );
-                    results.push(ScoredCandidate {
-                        title: candidate.title,
-                        path: candidate.path,
-                        distance_sum: total,
-                        distance_score,
-                        title_score: candidate.title_score,
-                        body_score: candidate.body_score,
-                        total_score: 0.0,
-                    });
-                }
-            }
+            let mut results = self.score_without_near(candidates);
+            self.normalize_scores(&mut results, &weights);
+            results.sort_by(|a, b| {
+                b.total_score
+                    .partial_cmp(&a.total_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            return results;
         }
 
+        let Some(sources) = self.resolve_sources(near_titles) else {
+            return Vec::new();
+        };
+
+        let distance_maps = self.compute_distance_maps(&sources, &weights);
+        let mut results =
+            self.score_candidates_with_distances(candidates, &distance_maps, &weights);
         self.normalize_scores(&mut results, &weights);
         results.sort_by(|a, b| {
             b.total_score
@@ -229,6 +154,109 @@ fn normalize_title_key(value: &str) -> String {
 }
 
 impl GraphStore {
+    fn score_without_near(&self, candidates: Vec<CandidateInput>) -> Vec<ScoredCandidate> {
+        candidates
+            .into_iter()
+            .map(|candidate| ScoredCandidate {
+                title: candidate.title,
+                path: candidate.path,
+                distance_sum: 0.0,
+                distance_score: 0.0,
+                title_score: candidate.title_score,
+                body_score: candidate.body_score,
+                total_score: 0.0,
+            })
+            .collect()
+    }
+
+    fn resolve_sources(&self, near_titles: Vec<String>) -> Option<Vec<NodeIndex>> {
+        let mut sources = Vec::new();
+        for near in near_titles {
+            if let Some(source) = self.resolve_near(&near) {
+                sources.push(source);
+            } else {
+                return None;
+            }
+        }
+        Some(sources)
+    }
+
+    fn compute_distance_maps(
+        &self,
+        sources: &[NodeIndex],
+        weights: &ScoreWeights,
+    ) -> Vec<HashMap<NodeIndex, f32>> {
+        let degrees = self.degree_map();
+        let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
+        let undirected = if use_weighted {
+            Some(self.graph.clone().into_edge_type::<Undirected>())
+        } else {
+            None
+        };
+
+        sources
+            .iter()
+            .map(|source| {
+                if let Some(graph) = undirected.as_ref() {
+                    dijkstra(graph, *source, None, |edge| {
+                        let deg_a = *degrees.get(&edge.source()).unwrap_or(&0);
+                        let deg_b = *degrees.get(&edge.target()).unwrap_or(&0);
+                        let degree_sum = (deg_a + deg_b) as f32;
+                        let base = if degree_sum > 0.0 {
+                            degree_sum / 2.0
+                        } else {
+                            1.0
+                        };
+                        base.powf(weights.connection_strength)
+                    })
+                    .into_iter()
+                    .collect()
+                } else {
+                    bfs_multi_source(&self.graph, &[*source])
+                        .into_iter()
+                        .map(|(node, distance)| (node, distance as f32))
+                        .collect()
+                }
+            })
+            .collect()
+    }
+
+    fn score_candidates_with_distances(
+        &self,
+        candidates: Vec<CandidateInput>,
+        distance_maps: &[HashMap<NodeIndex, f32>],
+        weights: &ScoreWeights,
+    ) -> Vec<ScoredCandidate> {
+        let mut results = Vec::new();
+        for candidate in candidates {
+            let Some(node) = self.path_index.get(&candidate.path).copied() else {
+                continue;
+            };
+
+            let Some(total) = distance_sum(distance_maps, node) else {
+                continue;
+            };
+
+            // Subtracting 1 treats direct neighbors (distance=1) the same as
+            // the source node itself (distance=0), since both represent immediate context.
+            let effective_distance = (total - 1.0).max(0.0);
+            let distance_score = score_distance(
+                effective_distance,
+                weights.distance_falloff,
+                &weights.distance_curve,
+            );
+            results.push(ScoredCandidate {
+                title: candidate.title,
+                path: candidate.path,
+                distance_sum: total,
+                distance_score,
+                title_score: candidate.title_score,
+                body_score: candidate.body_score,
+                total_score: 0.0,
+            });
+        }
+        results
+    }
     fn normalize_scores(&self, results: &mut [ScoredCandidate], weights: &ScoreWeights) {
         if results.is_empty() {
             return;
@@ -294,6 +322,18 @@ impl GraphStore {
         let key = normalize_title_key(value);
         self.title_index.get(&key).copied()
     }
+}
+
+fn distance_sum(distance_maps: &[HashMap<NodeIndex, f32>], node: NodeIndex) -> Option<f32> {
+    let mut total = 0.0f32;
+    for map in distance_maps {
+        if let Some(distance) = map.get(&node) {
+            total += distance;
+        } else {
+            return None;
+        }
+    }
+    Some(total)
 }
 
 fn path_with_md(value: &str) -> String {
