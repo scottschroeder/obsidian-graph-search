@@ -1,8 +1,6 @@
-use std::{
-    cmp::max,
-    collections::{HashMap, HashSet},
-};
+use std::{cmp::max, collections::HashSet};
 
+use hashbrown::HashMap;
 use petgraph::{
     algo::dijkstra,
     graph::{Graph, NodeIndex},
@@ -197,8 +195,6 @@ impl GraphStore {
                         1.0
                     }
                 })
-                .into_iter()
-                .collect()
             })
             .collect()
     }
