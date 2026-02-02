@@ -22,42 +22,23 @@ pub(crate) fn tokenize(text: &str) -> HashSet<String> {
 
 pub(crate) fn extract_composite_tokens(text: &str) -> HashSet<String> {
     let mut tokens = HashSet::new();
-    let mut current = String::new();
-    let mut has_separator = false;
-    let mut has_alphanumeric = false;
+    let mut buffer = CompositeBuffer::new();
 
     for ch in text.chars() {
         if ch.is_alphanumeric() {
-            append_lowercase(&mut current, ch);
-            has_alphanumeric = true;
+            buffer.push_alphanumeric(ch);
             continue;
         }
 
         if is_composite_separator(ch) {
-            handle_composite_separator(
-                ch,
-                &mut current,
-                &mut has_separator,
-                &mut has_alphanumeric,
-                &mut tokens,
-            );
+            buffer.push_separator(ch, &mut tokens);
             continue;
         }
 
-        flush_composite_token(
-            &mut tokens,
-            &mut current,
-            &mut has_alphanumeric,
-            &mut has_separator,
-        );
+        buffer.flush(&mut tokens);
     }
 
-    flush_composite_token(
-        &mut tokens,
-        &mut current,
-        &mut has_alphanumeric,
-        &mut has_separator,
-    );
+    buffer.flush(&mut tokens);
 
     tokens
 }
@@ -87,36 +68,77 @@ fn is_prefix_separator(ch: char) -> bool {
     matches!(ch, '$' | '/')
 }
 
-fn handle_composite_separator(
-    ch: char,
-    current: &mut String,
-    has_separator: &mut bool,
-    has_alphanumeric: &mut bool,
-    tokens: &mut HashSet<String>,
-) {
-    if current.is_empty() {
-        if is_prefix_separator(ch) {
-            current.push(ch);
-            *has_separator = true;
-        } else {
-            flush_composite_token(tokens, current, has_alphanumeric, has_separator);
-        }
-        return;
-    }
-    current.push(ch);
-    *has_separator = true;
+struct CompositeBuffer {
+    token: String,
+    segment_ranges: Vec<(usize, usize)>,
+    segment_start: Option<usize>,
+    has_separator: bool,
+    has_alphanumeric: bool,
 }
 
-fn flush_composite_token(
-    tokens: &mut HashSet<String>,
-    current: &mut String,
-    has_alphanumeric: &mut bool,
-    has_separator: &mut bool,
-) {
-    add_composite_token_if_valid(tokens, current, *has_alphanumeric, *has_separator);
-    current.clear();
-    *has_separator = false;
-    *has_alphanumeric = false;
+impl CompositeBuffer {
+    fn new() -> Self {
+        Self {
+            token: String::new(),
+            segment_ranges: Vec::new(),
+            segment_start: None,
+            has_separator: false,
+            has_alphanumeric: false,
+        }
+    }
+
+    fn push_alphanumeric(&mut self, ch: char) {
+        if self.segment_start.is_none() {
+            self.segment_start = Some(self.token.len());
+        }
+        append_lowercase(&mut self.token, ch);
+        self.has_alphanumeric = true;
+    }
+
+    fn push_separator(&mut self, ch: char, tokens: &mut HashSet<String>) {
+        if self.token.is_empty() {
+            if is_prefix_separator(ch) {
+                self.token.push(ch);
+                self.has_separator = true;
+            } else {
+                self.flush(tokens);
+            }
+            return;
+        }
+
+        self.close_segment();
+        self.token.push(ch);
+        self.has_separator = true;
+    }
+
+    fn close_segment(&mut self) {
+        if let Some(start) = self.segment_start.take() {
+            let end = self.token.len();
+            if end > start {
+                self.segment_ranges.push((start, end));
+            }
+        }
+    }
+
+    fn flush(&mut self, tokens: &mut HashSet<String>) {
+        self.close_segment();
+        add_composite_token_if_valid_with_segments(
+            tokens,
+            &self.token,
+            &self.segment_ranges,
+            self.has_alphanumeric,
+            self.has_separator,
+        );
+        self.reset();
+    }
+
+    fn reset(&mut self) {
+        self.token.clear();
+        self.segment_ranges.clear();
+        self.segment_start = None;
+        self.has_separator = false;
+        self.has_alphanumeric = false;
+    }
 }
 
 fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -> bool {
@@ -139,56 +161,52 @@ fn is_valid_composite_token(token: &str, has_alnum: bool, has_separator: bool) -
     starts_ok && ends_ok
 }
 
-fn add_composite_token_if_valid(
+fn add_composite_token_if_valid_with_segments(
     tokens: &mut HashSet<String>,
     token: &str,
+    segment_ranges: &[(usize, usize)],
     has_alnum: bool,
     has_separator: bool,
 ) {
     if is_valid_composite_token(token, has_alnum, has_separator) {
-        add_composite_token_variants(tokens, token);
+        add_composite_token_variants(tokens, token, segment_ranges);
     }
 }
 
-fn add_composite_token_variants(tokens: &mut HashSet<String>, token: &str) {
+fn add_composite_token_variants(
+    tokens: &mut HashSet<String>,
+    token: &str,
+    segment_ranges: &[(usize, usize)],
+) {
     tokens.insert(token.to_string());
-    add_composite_segments(tokens, token);
-    add_composite_suffixes(tokens, token);
+    add_composite_segments_from_ranges(tokens, token, segment_ranges);
+    add_composite_suffixes_from_ranges(tokens, token, segment_ranges);
 }
 
-fn add_composite_segments(tokens: &mut HashSet<String>, token: &str) {
-    let mut current = String::new();
-    for ch in token.chars() {
-        if is_composite_separator(ch) {
-            if !current.is_empty() {
-                tokens.insert(current.clone());
-                current.clear();
-            }
-            continue;
+fn add_composite_segments_from_ranges(
+    tokens: &mut HashSet<String>,
+    token: &str,
+    segment_ranges: &[(usize, usize)],
+) {
+    for (start, end) in segment_ranges {
+        if end > start {
+            tokens.insert(token[*start..*end].to_string());
         }
-        current.push(ch);
-    }
-    if !current.is_empty() {
-        tokens.insert(current);
     }
 }
 
-fn add_composite_suffixes(tokens: &mut HashSet<String>, token: &str) {
-    let mut starts = Vec::new();
-    let mut prev_is_sep = true;
-    for (idx, ch) in token.char_indices() {
-        let is_sep = is_composite_separator(ch);
-        if !is_sep && prev_is_sep {
-            starts.push(idx);
-        }
-        prev_is_sep = is_sep;
+fn add_composite_suffixes_from_ranges(
+    tokens: &mut HashSet<String>,
+    token: &str,
+    segment_ranges: &[(usize, usize)],
+) {
+    if segment_ranges.len() < 2 {
+        return;
     }
-    for start in starts.iter().skip(1) {
-        let suffix = &token[*start..];
+    for idx in 1..segment_ranges.len() - 1 {
+        let start = segment_ranges[idx].0;
+        let suffix = &token[start..];
         if suffix.len() < 2 {
-            continue;
-        }
-        if !suffix.chars().any(is_composite_separator) {
             continue;
         }
         tokens.insert(suffix.to_string());
@@ -259,6 +277,44 @@ mod tests {
         assert!(!tokens.contains("end."));
         assert!(tokens.contains("mid-/dash"));
         assert!(tokens.contains("$money"));
+    }
+
+    #[test]
+    fn extract_composite_tokens_unicode_segments() {
+        let tokens = extract_composite_tokens("Über/naïve:кофе");
+        assert!(tokens.contains("über/naïve:кофе"));
+        assert!(tokens.contains("über"));
+        assert!(tokens.contains("naïve"));
+        assert!(tokens.contains("кофе"));
+        assert!(tokens.contains("naïve:кофе"));
+    }
+
+    #[test]
+    fn extract_composite_tokens_unicode_lowercase_expansion() {
+        let tokens = extract_composite_tokens("İstanbul/ßeta");
+        assert!(tokens.contains("i̇stanbul/ßeta"));
+        assert!(tokens.contains("i̇stanbul"));
+        assert!(tokens.contains("ßeta"));
+    }
+
+    #[test]
+    fn extract_composite_tokens_repeated_separator_suffixes() {
+        let tokens = extract_composite_tokens("a..b--c__d");
+        assert!(tokens.contains("a..b--c__d"));
+        assert!(tokens.contains("b--c__d"));
+        assert!(tokens.contains("c__d"));
+    }
+
+    #[test]
+    fn extract_composite_tokens_rejects_trailing_separator() {
+        let tokens = extract_composite_tokens("path/to/");
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn extract_composite_tokens_requires_separator() {
+        let tokens = extract_composite_tokens("naïve");
+        assert!(tokens.is_empty());
     }
 
     #[test]
