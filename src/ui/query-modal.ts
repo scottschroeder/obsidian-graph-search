@@ -35,6 +35,8 @@ import { openTagPicker } from "./tag-suggest";
 type GraphSearchPluginApi = {
 	buildGraphIndex(): Promise<void>;
 	buildSearchIndex(): Promise<void>;
+	clearIndexes(): void;
+	clearActiveModal(): void;
 	getSearchContent(path: string): string;
 	getDisplayTitle(path: string): string;
 	getScoreWeights(): ScoreWeights;
@@ -42,7 +44,7 @@ type GraphSearchPluginApi = {
 };
 
 export class GraphQueryModal extends Modal {
-	private static readonly DEBOUNCE_MS = 200;
+	private static readonly DEBOUNCE_MS = 20;
 	private static readonly MAX_RESULTS = 50;
 
 	private plugin: GraphSearchPluginApi;
@@ -55,6 +57,8 @@ export class GraphQueryModal extends Modal {
 	private debounceHandle?: number;
 	private graphReady = false;
 	private searchReady = false;
+	private buildPromise?: Promise<void>;
+	private isClosed = false;
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
@@ -74,6 +78,10 @@ export class GraphQueryModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.addClass("prompt");
+		this.isClosed = false;
+		this.graphReady = false;
+		this.searchReady = false;
+		this.startBuild();
 
 		const inputWrapper = contentEl.createDiv({
 			cls: "graph-search-input-wrapper",
@@ -213,7 +221,44 @@ export class GraphQueryModal extends Modal {
 			window.clearTimeout(this.debounceHandle);
 		}
 		this.cancelPendingFilter();
+		this.isClosed = true;
+		this.plugin.clearIndexes();
+		this.plugin.clearActiveModal();
 		this.contentEl.empty();
+	}
+
+	focusInput() {
+		this.inputEl?.focus();
+	}
+
+	private startBuild() {
+		if (this.buildPromise) {
+			return;
+		}
+		this.buildPromise = (async () => {
+			try {
+				await this.plugin.buildGraphIndex();
+				if (this.isClosed) {
+					return;
+				}
+				this.graphReady = true;
+				await this.plugin.buildSearchIndex();
+				if (this.isClosed) {
+					return;
+				}
+				this.searchReady = true;
+			} catch (error) {
+				console.error("Graph index build failed", error);
+				new Notice("Graph index build failed; see console");
+			} finally {
+				if (this.isClosed) {
+					this.plugin.clearIndexes();
+				}
+			}
+		})();
+		this.buildPromise.finally(() => {
+			this.buildPromise = undefined;
+		});
 	}
 
 	private maybeScheduleFilter(event: Event, raw: string, cursor: number) {
@@ -336,6 +381,9 @@ export class GraphQueryModal extends Modal {
 		}
 
 		try {
+			if (this.buildPromise) {
+				await this.buildPromise;
+			}
 			if (!this.graphReady) {
 				await this.plugin.buildGraphIndex();
 				this.graphReady = true;

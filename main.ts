@@ -37,6 +37,7 @@ export default class GraphSearchPlugin extends Plugin {
 	settings: GraphSearchPluginSettings;
 	private searchContentByPath = new Map<string, string>();
 	private displayTitleByPath = new Map<string, string>();
+	private activeModal?: GraphQueryModal;
 
 	async onload() {
 		await this.loadSettings();
@@ -44,7 +45,12 @@ export default class GraphSearchPlugin extends Plugin {
 			id: "query",
 			name: "Graph query",
 			callback: () => {
-				new GraphQueryModal(this.app, this).open();
+				if (this.activeModal) {
+					this.activeModal.focusInput();
+					return;
+				}
+				this.activeModal = new GraphQueryModal(this.app, this);
+				this.activeModal.open();
 			},
 		});
 
@@ -62,6 +68,20 @@ export default class GraphSearchPlugin extends Plugin {
 		} catch (e) {
 			// WASM cleanup failed, not critical
 		}
+	}
+
+	clearIndexes() {
+		this.searchContentByPath.clear();
+		this.displayTitleByPath.clear();
+		try {
+			plugin.cleanup_all();
+		} catch (e) {
+			// WASM cleanup failed, not critical
+		}
+	}
+
+	clearActiveModal() {
+		this.activeModal = undefined;
 	}
 
 	async loadSettings() {
