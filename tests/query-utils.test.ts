@@ -9,20 +9,21 @@ import {
 	displayLengthForAtoms,
 	findTokenAtCursor,
 	offsetForAtom,
+	snapCaretBeforeChip,
 	stripMdExtension,
 } from "../src/ui/query-utils";
 import {
-	buildEditableHtmlFromAtoms,
 	buildSnippet,
 	escapeRegExp,
 	highlightSnippet,
 } from "../src/ui/html-utils";
+import { buildEditableHtmlFromAtoms } from "../src/ui/query-input/html-utils";
 import {
 	extractAtomsFromEditable,
 	extractRawFromEditable,
 	getCaretOffset,
 	restoreCaretOffset,
-} from "../src/ui/editable-dom";
+} from "../src/ui/query-input/editable-dom";
 
 describe("query utils", () => {
 	it("strips .md extension", () => {
@@ -73,6 +74,53 @@ describe("query utils", () => {
 		document.body.removeChild(div);
 	});
 
+	it("restores caret before chip when preferred", () => {
+		const atoms: QueryAtom[] = [
+			{ kind: "term", value: "a" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "near", value: "My Note" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "term", value: "and" },
+		];
+		const html = buildEditableHtmlFromAtoms(atoms);
+		const div = document.createElement("div");
+		div.setAttribute("contenteditable", "true");
+		div.innerHTML = html;
+		document.body.appendChild(div);
+		const insideChipOffset = 4;
+		restoreCaretOffset(div, insideChipOffset, { preferBeforeChip: true });
+		const caret = getCaretOffset(div);
+		expect(caret).toBe(2);
+		document.body.removeChild(div);
+	});
+
+	it("computes caret offset when selection is on root", () => {
+		const atoms: QueryAtom[] = [
+			{ kind: "near", value: "One" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "near", value: "Two" },
+		];
+		const html = buildEditableHtmlFromAtoms(atoms);
+		const div = document.createElement("div");
+		div.setAttribute("contenteditable", "true");
+		div.innerHTML = html;
+		document.body.appendChild(div);
+		const selection = window.getSelection();
+		const range = document.createRange();
+		range.setStart(div, 0);
+		range.collapse(true);
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		expect(getCaretOffset(div)).toBe(0);
+		const chipLength = atoms[0].value.length;
+		range.setStart(div, 1);
+		range.collapse(true);
+		selection?.removeAllRanges();
+		selection?.addRange(range);
+		expect(getCaretOffset(div)).toBe(chipLength);
+		document.body.removeChild(div);
+	});
+
 	it("extracts raw text from editable chips", () => {
 		const atoms: QueryAtom[] = [
 			{ kind: "tag", value: "#meeting" },
@@ -94,6 +142,30 @@ describe("query utils", () => {
 		expect(displayLengthForAtom(atoms[0])).toBe(5);
 		expect(displayLengthForAtoms(atoms)).toBe(9);
 		expect(offsetForAtom(atoms, 2)).toBe(6);
+	});
+
+	it("snaps caret before chip when inside", () => {
+		const atoms: QueryAtom[] = [
+			{ kind: "term", value: "foo" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "near", value: "note", display: "Note.md" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "term", value: "bar" },
+		];
+		expect(snapCaretBeforeChip(atoms, 6)).toBe(4);
+	});
+
+	it("keeps caret outside chip bounds", () => {
+		const atoms: QueryAtom[] = [
+			{ kind: "term", value: "foo" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "near", value: "note", display: "Note.md" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "term", value: "bar" },
+		];
+		expect(snapCaretBeforeChip(atoms, 0)).toBe(0);
+		expect(snapCaretBeforeChip(atoms, 4)).toBe(4);
+		expect(snapCaretBeforeChip(atoms, 11)).toBe(11);
 	});
 });
 

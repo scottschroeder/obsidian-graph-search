@@ -1,4 +1,4 @@
-import type { QueryAtom, QueryAtomKind } from "./types";
+import type { QueryAtom, QueryAtomKind } from "../types";
 
 export function extractAtomsFromEditable(root: HTMLElement): QueryAtom[] {
 	const atoms: QueryAtom[] = [];
@@ -25,16 +25,60 @@ export function getCaretOffset(root: HTMLElement): number | null {
 	if (!root.contains(range.startContainer)) {
 		return null;
 	}
+	if (range.startContainer === root) {
+		return computeRawOffsetFromRoot(root, range.startOffset);
+	}
 	return computeRawOffset(root, range.startContainer, range.startOffset);
 }
 
-export function restoreCaretOffset(root: HTMLElement, rawOffset: number) {
+export function getRangeOffsets(
+	root: HTMLElement,
+	range: Range,
+): { start: number; end: number } | null {
+	if (!root.contains(range.startContainer)) {
+		return null;
+	}
+	if (!root.contains(range.endContainer)) {
+		return null;
+	}
+	const start =
+		range.startContainer === root
+			? computeRawOffsetFromRoot(root, range.startOffset)
+			: computeRawOffset(root, range.startContainer, range.startOffset);
+	const end =
+		range.endContainer === root
+			? computeRawOffsetFromRoot(root, range.endOffset)
+			: computeRawOffset(root, range.endContainer, range.endOffset);
+	return { start, end };
+}
+
+function computeRawOffsetFromRoot(
+	root: HTMLElement,
+	startOffset: number,
+): number {
+	let offset = 0;
+	const children = Array.from(root.childNodes);
+	for (let i = 0; i < startOffset && i < children.length; i += 1) {
+		offset += rawLength(children[i]);
+	}
+	return offset;
+}
+
+export function restoreCaretOffset(
+	root: HTMLElement,
+	rawOffset: number,
+	options?: { preferBeforeChip?: boolean },
+) {
 	const selection = window.getSelection();
 	if (!selection) {
 		return;
 	}
 	const range = document.createRange();
-	const target = findNodeAtRawOffset(root, rawOffset);
+	const target = findNodeAtRawOffset(
+		root,
+		rawOffset,
+		options?.preferBeforeChip ?? false,
+	);
 	if (target) {
 		range.setStart(target.node, target.offset);
 		range.collapse(true);
@@ -260,6 +304,7 @@ function getChipParts(chip: HTMLElement): {
 function findNodeAtRawOffset(
 	root: HTMLElement,
 	rawOffset: number,
+	preferBeforeChip: boolean,
 ): { node: Node; offset: number } | null {
 	let remaining = rawOffset;
 	let result: { node: Node; offset: number } | null = null;
@@ -286,6 +331,22 @@ function findNodeAtRawOffset(
 			const valueLen = parts.value.length;
 			const totalLen = prefixLen + valueLen + parts.suffix.length;
 			if (remaining === 0) {
+				const prev = el.previousSibling;
+				if (prev && prev.nodeType === Node.TEXT_NODE) {
+					result = {
+						node: prev,
+						offset: prev.textContent?.length ?? 0,
+					};
+					return;
+				}
+				const parent = el.parentNode;
+				if (parent) {
+					const index = Array.from(parent.childNodes).indexOf(el);
+					result = { node: parent, offset: Math.max(index, 0) };
+					return;
+				}
+			}
+			if (remaining > 0 && remaining < totalLen && preferBeforeChip) {
 				const prev = el.previousSibling;
 				if (prev && prev.nodeType === Node.TEXT_NODE) {
 					result = {

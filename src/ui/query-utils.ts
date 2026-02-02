@@ -95,6 +95,27 @@ export function displayLengthForAtoms(atoms: QueryAtom[]): number {
 	return atoms.reduce((total, atom) => total + displayLengthForAtom(atom), 0);
 }
 
+export function snapCaretBeforeChip(
+	atoms: QueryAtom[],
+	caretOffset: number,
+): number {
+	let cursor = 0;
+	for (const atom of atoms) {
+		const length = displayLengthForAtom(atom);
+		const end = cursor + length;
+		if (
+			atom.kind !== "term" &&
+			atom.kind !== "whitespace" &&
+			caretOffset > cursor &&
+			caretOffset < end
+		) {
+			return cursor;
+		}
+		cursor = end;
+	}
+	return caretOffset;
+}
+
 export function offsetForAtom(atoms: QueryAtom[], index: number): number {
 	let offset = 0;
 	for (let i = 0; i < atoms.length; i += 1) {

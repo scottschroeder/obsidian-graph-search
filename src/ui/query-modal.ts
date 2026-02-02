@@ -16,15 +16,17 @@ import {
 	formatTagValue,
 	isColonInsert,
 	normalizeAtoms,
-	offsetForAtom,
+	snapCaretBeforeChip,
 } from "./query-utils";
-import { buildEditableHtmlFromAtoms, buildSnippet } from "./html-utils";
+import { QueryInputModel } from "./query-input/query-input-model";
+import { buildSnippet } from "./html-utils";
+import { buildEditableHtmlFromAtoms } from "./query-input/html-utils";
 import {
-	extractAtomsFromEditable,
 	extractRawFromEditable,
 	getCaretOffset,
+	getRangeOffsets,
 	restoreCaretOffset,
-} from "./editable-dom";
+} from "./query-input/editable-dom";
 import { openFilterPicker } from "./filter-suggest";
 import { openPathPicker } from "./path-suggest";
 import { openTitlePicker } from "./title-suggest";
@@ -61,6 +63,7 @@ export class GraphQueryModal extends Modal {
 	private isRendering = false;
 	private pendingFilterHandle?: number;
 	private pendingFilterCaret?: number;
+	private inputModel = new QueryInputModel();
 
 	constructor(app: App, plugin: GraphSearchPluginApi) {
 		super(app);
@@ -106,30 +109,102 @@ export class GraphQueryModal extends Modal {
 			if (event.key === "Escape") {
 				this.close();
 			}
-			if (event.key === "Backspace") {
-				if (this.handleBackspaceToken()) {
-					event.preventDefault();
-				}
-			}
 		});
 
-		this.inputEl.addEventListener("input", (event) => {
+		this.inputEl.addEventListener("beforeinput", (event) => {
 			if (this.isRendering) {
 				return;
 			}
-			const raw = extractRawFromEditable(this.inputEl as HTMLElement);
-			const caret =
-				getCaretOffset(this.inputEl as HTMLElement) ?? raw.length;
-			const atoms = extractAtomsFromEditable(this.inputEl as HTMLElement);
-			if (this.handleLiteralColon(event, raw, caret, atoms)) {
+			if (!(event instanceof InputEvent)) {
 				return;
 			}
+			this.logCaretContext("beforeinput:start", event);
+			const selection = window.getSelection();
+			const range = selection?.rangeCount
+				? selection.getRangeAt(0)
+				: null;
+			const offsets =
+				range && this.inputEl
+					? getRangeOffsets(this.inputEl, range)
+					: null;
+			if (!offsets) {
+				return;
+			}
+			const inputType = event.inputType ?? "";
+			const rangeStart = Math.min(offsets.start, offsets.end);
+			const rangeEnd = Math.max(offsets.start, offsets.end);
+			const snappedCaret = snapCaretBeforeChip(
+				this.inputModel.atoms,
+				rangeStart,
+			);
+			this.inputModel.setCaret(snappedCaret);
+			let handled = false;
+			if (inputType === "insertText") {
+				const data = event.data ?? "";
+				if (rangeEnd > rangeStart) {
+					this.inputModel.applyReplaceRange(
+						rangeStart,
+						rangeEnd,
+						data,
+					);
+				} else {
+					this.inputModel.applyInsertText(data);
+				}
+				handled = true;
+				if (data === ":") {
+					if (this.handleLiteralColonFromModel()) {
+						event.preventDefault();
+						this.syncFromModel();
+						return;
+					}
+				}
+			} else if (inputType === "insertFromPaste") {
+				const data =
+					event.dataTransfer?.getData("text/plain") ??
+					event.data ??
+					"";
+				if (rangeEnd > rangeStart) {
+					this.inputModel.applyReplaceRange(
+						rangeStart,
+						rangeEnd,
+						data,
+					);
+				} else {
+					this.inputModel.applyInsertText(data);
+				}
+				handled = true;
+			} else if (inputType === "deleteContentBackward") {
+				if (rangeEnd > rangeStart) {
+					this.inputModel.deleteRange(rangeStart, rangeEnd);
+				} else {
+					this.inputModel.applyBackspace();
+				}
+				handled = true;
+			} else if (inputType === "deleteContentForward") {
+				if (rangeEnd > rangeStart) {
+					this.inputModel.deleteRange(rangeStart, rangeEnd);
+				} else {
+					this.inputModel.applyDeleteForward();
+				}
+				handled = true;
+			}
+			if (!handled) {
+				return;
+			}
+			event.preventDefault();
 			this.cancelPendingFilter();
-			this.maybeScheduleFilter(event, raw, caret);
-			this.setAtoms(atoms, caret);
+			if (inputType === "insertText" && event.data === ":") {
+				this.maybeScheduleFilter(
+					event,
+					this.inputModel.displayString(),
+					this.inputModel.caretOffset,
+				);
+			}
+			this.syncFromModel();
+			this.logCaretContext("beforeinput:end", event);
 		});
 
-		this.setAtoms([], 0);
+		this.syncFromModel();
 		this.inputEl.focus();
 	}
 
@@ -395,14 +470,15 @@ export class GraphQueryModal extends Modal {
 		// which sanitizes all user input before insertion.
 		this.inputEl.innerHTML = buildEditableHtmlFromAtoms(this.atoms);
 		const offset = caretOffset ?? this.displayLength(this.atoms);
-		restoreCaretOffset(this.inputEl, offset);
+		restoreCaretOffset(this.inputEl, offset, { preferBeforeChip: true });
 		this.isRendering = false;
+		this.logCaretContext("render", undefined);
 	}
 
-	private setAtoms(atoms: QueryAtom[], caretOffset?: number) {
-		this.atoms = normalizeAtoms(atoms);
+	private syncFromModel() {
+		this.atoms = normalizeAtoms(this.inputModel.atoms);
 		this.rawQuery = buildRawFromAtoms(this.atoms);
-		this.renderEditable(caretOffset);
+		this.renderEditable(this.inputModel.caretOffset);
 		this.scheduleQuery();
 		this.inputEl?.focus();
 	}
@@ -414,102 +490,17 @@ export class GraphQueryModal extends Modal {
 		display?: string,
 	) {
 		const cleanedValue = value.trim();
-		const removal = this.removeColonAtOffset(this.atoms, caretOffset - 1);
+		const removal = this.removeColonAtOffset(
+			this.inputModel.atoms,
+			caretOffset - 1,
+		);
 		const adjustedOffset = removal.removed
 			? Math.max(0, caretOffset - 1)
 			: caretOffset;
-		const result = this.insertAtomAtOffset(
-			removal.atoms,
-			{ kind, value: cleanedValue, display },
-			adjustedOffset,
-		);
-		const updated = [...result.atoms];
-		const next = updated[result.index + 1];
-		if (!next || next.kind !== "whitespace") {
-			updated.splice(result.index + 1, 0, {
-				kind: "whitespace",
-				value: " ",
-			});
-			result.caretOffset += 1;
-		}
+		this.inputModel = new QueryInputModel(removal.atoms, adjustedOffset);
+		this.inputModel.insertChip(kind, cleanedValue, display);
 		this.isSuggesting = false;
-		this.setAtoms(updated, result.caretOffset);
-	}
-
-	private insertAtomAtOffset(
-		atoms: QueryAtom[],
-		atom: QueryAtom,
-		offset: number,
-	): { atoms: QueryAtom[]; caretOffset: number; index: number } {
-		const updated = [...atoms];
-		let cursor = 0;
-		for (let index = 0; index < updated.length; index += 1) {
-			const current = updated[index];
-			const length = displayLengthForAtom(current);
-			const end = cursor + length;
-			if (offset <= end) {
-				if (current.kind === "term") {
-					const relative = Math.max(0, offset - cursor);
-					if (relative <= 0) {
-						updated.splice(index, 0, atom);
-						return {
-							atoms: updated,
-							caretOffset:
-								offsetForAtom(updated, index) +
-								displayLengthForAtom(atom),
-							index,
-						};
-					}
-					if (relative >= length) {
-						updated.splice(index + 1, 0, atom);
-						return {
-							atoms: updated,
-							caretOffset:
-								offsetForAtom(updated, index + 1) +
-								displayLengthForAtom(atom),
-							index: index + 1,
-						};
-					}
-					const before = current.value.slice(0, relative).trim();
-					const after = current.value.slice(relative).trim();
-					const insertIndex = index + (before ? 1 : 0);
-					const replacement: QueryAtom[] = [];
-					if (before) {
-						replacement.push({ kind: "term", value: before });
-					}
-					replacement.push(atom);
-					if (after) {
-						replacement.push({ kind: "term", value: after });
-					}
-					updated.splice(index, 1, ...replacement);
-					return {
-						atoms: updated,
-						caretOffset:
-							offsetForAtom(updated, insertIndex) +
-							displayLengthForAtom(atom),
-						index: insertIndex,
-					};
-				}
-				const insertIndex = offset <= cursor ? index : index + 1;
-				updated.splice(insertIndex, 0, atom);
-				return {
-					atoms: updated,
-					caretOffset:
-						offsetForAtom(updated, insertIndex) +
-						displayLengthForAtom(atom),
-					index: insertIndex,
-				};
-			}
-			cursor = end;
-		}
-		updated.push(atom);
-		return {
-			atoms: updated,
-			caretOffset:
-				offsetForAtom(updated, updated.length - 1) +
-				displayLengthForAtom(atom),
-			index: updated.length - 1,
-		};
+		this.syncFromModel();
 	}
 
 	private removeColonAtOffset(
@@ -559,15 +550,9 @@ export class GraphQueryModal extends Modal {
 		this.pendingFilterCaret = undefined;
 	}
 
-	private handleLiteralColon(
-		event: Event,
-		raw: string,
-		cursor: number,
-		atoms: QueryAtom[],
-	): boolean {
-		if (!isColonInsert(event)) {
-			return false;
-		}
+	private handleLiteralColonFromModel(): boolean {
+		const raw = this.inputModel.displayString();
+		const cursor = this.inputModel.caretOffset;
 		const insertIndex = cursor - 1;
 		const firstIndex = insertIndex - 1;
 		if (insertIndex < 0 || firstIndex < 0) {
@@ -581,51 +566,40 @@ export class GraphQueryModal extends Modal {
 			return false;
 		}
 		this.cancelPendingFilter();
-		const removal = this.removeColonAtOffset(atoms, cursor - 1);
-		const nextCursor = removal.removed ? Math.max(0, cursor - 1) : cursor;
-		this.setAtoms(removal.atoms, nextCursor);
+		this.inputModel.applyBackspace();
 		return true;
 	}
 
-	private handleBackspaceToken(): boolean {
+	private logCaretContext(reason: string, event?: InputEvent) {
+		if (!this.plugin.isDebugMode()) {
+			return;
+		}
 		if (!this.inputEl) {
-			return false;
+			return;
 		}
 		const selection = window.getSelection();
-		if (selection && !selection.isCollapsed) {
-			return false;
-		}
-		const range = selection?.getRangeAt(0);
-		if (!range) {
-			return false;
-		}
-		const startOffset = getCaretOffset(this.inputEl) ?? 0;
-		let chipEl: HTMLElement | null = null;
-		const container = range.startContainer;
-		if (container.nodeType === Node.ELEMENT_NODE) {
-			chipEl = (container as HTMLElement).closest(".graph-search-chip");
-		} else {
-			chipEl =
-				container.parentElement?.closest(".graph-search-chip") ?? null;
-		}
-		if (!chipEl && container.nodeType === Node.TEXT_NODE) {
-			if (range.startOffset === 0) {
-				const prev = container.previousSibling;
-				if (prev instanceof HTMLElement) {
-					chipEl = prev.classList.contains("graph-search-chip")
-						? prev
-						: null;
-				}
-			}
-		}
-		if (!chipEl) {
-			return false;
-		}
-		chipEl.remove();
-		const atoms = extractAtomsFromEditable(this.inputEl as HTMLElement);
-		const nextOffset = Math.max(0, startOffset - 1);
-		this.setAtoms(atoms, nextOffset);
-		return true;
+		const anchorNode = selection?.anchorNode ?? null;
+		const focusNode = selection?.focusNode ?? null;
+		const anchorOffset = selection?.anchorOffset ?? null;
+		const focusOffset = selection?.focusOffset ?? null;
+		const raw = extractRawFromEditable(this.inputEl);
+		const caret = getCaretOffset(this.inputEl);
+		const atomSummary = this.atoms.map((atom) => atom.kind).join(",");
+		const inputType = event?.inputType ?? "";
+		const data = event?.data ?? "";
+		console.log("[graph-search] caret", {
+			reason,
+			inputType,
+			data,
+			raw,
+			caret,
+			modelCaret: this.inputModel.caretOffset,
+			atoms: atomSummary,
+			anchorNode,
+			anchorOffset,
+			focusNode,
+			focusOffset,
+		});
 	}
 
 	private moveSelection(delta: number) {
