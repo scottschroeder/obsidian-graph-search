@@ -39,7 +39,7 @@ export function normalizeLinkTarget(value: string): string {
 }
 
 export function normalizeLinkKey(value: string): string {
-	return value.trim().toLowerCase();
+	return value.trim();
 }
 
 type BuildDanglingInput = {

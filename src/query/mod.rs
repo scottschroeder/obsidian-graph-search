@@ -14,6 +14,8 @@ pub(crate) enum QueryAtomKind {
 pub(crate) struct QueryAtom {
     pub(crate) kind: QueryAtomKind,
     pub(crate) value: String,
+    #[serde(default)]
+    pub(crate) display: Option<String>,
 }
 
 #[derive(Debug)]
@@ -62,30 +64,37 @@ mod tests {
             QueryAtom {
                 kind: QueryAtomKind::Near,
                 value: "My Note".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Whitespace,
                 value: " ".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Term,
                 value: "budget".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Whitespace,
                 value: " ".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Tag,
                 value: "#meeting".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Term,
                 value: "deadline".to_string(),
+                display: None,
             },
             QueryAtom {
                 kind: QueryAtomKind::Path,
                 value: "projects".to_string(),
+                display: None,
             },
         ];
 

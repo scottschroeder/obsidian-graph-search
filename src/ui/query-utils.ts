@@ -19,12 +19,17 @@ export function normalizeAtoms(atoms: QueryAtom[]): QueryAtom[] {
 		if (!trimmed) {
 			continue;
 		}
+		const trimmedDisplay = atom.display?.trim();
 		const last = normalized[normalized.length - 1];
 		if (last && last.kind === "term" && atom.kind === "term") {
 			last.value += trimmed;
 			continue;
 		}
-		normalized.push({ kind: atom.kind, value: trimmed });
+		const next: QueryAtom = { kind: atom.kind, value: trimmed };
+		if (trimmedDisplay && trimmedDisplay.length > 0) {
+			next.display = trimmedDisplay;
+		}
+		normalized.push(next);
 	}
 	return normalized.filter((atom) => atom.value.length > 0);
 }
@@ -64,11 +69,6 @@ export function findTokenAtCursor(
 	return token.length > 0 ? { start, end, token } : null;
 }
 
-export function formatNearValue(value: string): string {
-	const trimmed = stripMdExtension(value.trim());
-	return trimmed;
-}
-
 export function formatTagValue(value: string): string {
 	const trimmed = value.trim();
 	if (!trimmed) {
@@ -82,6 +82,28 @@ export function extractBodyTermsFromAtoms(atoms: QueryAtom[]): string[] {
 		.filter((atom) => atom.kind === "term")
 		.map((atom) => atom.value.trim())
 		.filter((term) => term.length > 0);
+}
+
+export function displayLengthForAtom(atom: QueryAtom): number {
+	if (atom.kind === "term" || atom.kind === "whitespace") {
+		return atom.value.length;
+	}
+	return (atom.display ?? atom.value).length;
+}
+
+export function displayLengthForAtoms(atoms: QueryAtom[]): number {
+	return atoms.reduce((total, atom) => total + displayLengthForAtom(atom), 0);
+}
+
+export function offsetForAtom(atoms: QueryAtom[], index: number): number {
+	let offset = 0;
+	for (let i = 0; i < atoms.length; i += 1) {
+		if (i === index) {
+			return offset;
+		}
+		offset += displayLengthForAtom(atoms[i]);
+	}
+	return offset;
 }
 
 export { stripMdExtension };

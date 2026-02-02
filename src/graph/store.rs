@@ -1,4 +1,4 @@
-use std::{cmp::max, collections::HashSet};
+use std::collections::HashSet;
 
 use hashbrown::HashMap;
 use petgraph::{
@@ -36,7 +36,6 @@ pub(crate) struct ScoreWeights {
 
 pub(crate) struct GraphStore {
     graph: Graph<NodeData, ()>,
-    title_index: HashMap<String, NodeIndex>,
     path_index: HashMap<String, NodeIndex>,
 }
 
@@ -44,14 +43,12 @@ impl GraphStore {
     pub(crate) fn new() -> Self {
         Self {
             graph: Graph::new(),
-            title_index: HashMap::new(),
             path_index: HashMap::new(),
         }
     }
 
     pub(crate) fn clear(&mut self) {
         self.graph = Graph::new();
-        self.title_index.clear();
         self.path_index.clear();
     }
 
@@ -59,27 +56,21 @@ impl GraphStore {
         self.clear();
 
         for node in nodes {
-            let mut title = node.title;
-            let mut title_key = normalize_title_key(&title);
-            if self.title_index.contains_key(&title_key) {
-                title = node.path.clone();
-                title_key = normalize_title_key(&title);
-            }
-
-            let path_key = node.path.clone();
+            let path_key = canonical_path(&node.path);
             let data = NodeData {
-                title,
-                path: node.path,
+                title: node.title,
+                path: path_key.clone(),
             };
             let index = self.graph.add_node(data);
 
             self.path_index.insert(path_key, index);
-            self.title_index.insert(title_key, index);
         }
 
         for edge in edges {
-            let from = self.path_index.get(&edge.from).copied();
-            let to = self.path_index.get(&edge.to).copied();
+            let from_key = canonical_path(&edge.from);
+            let to_key = canonical_path(&edge.to);
+            let from = self.path_index.get(&from_key).copied();
+            let to = self.path_index.get(&to_key).copied();
             if let (Some(from), Some(to)) = (from, to) {
                 self.graph.add_edge(from, to, ());
             }
@@ -130,10 +121,6 @@ fn score_distance(distance: f32, falloff: f32, curve: &str) -> f32 {
         // Default to exponential decay (includes "exponential" and unknown curves)
         _ => (-falloff * distance).exp(),
     }
-}
-
-fn normalize_title_key(value: &str) -> String {
-    value.trim().to_lowercase()
 }
 
 impl GraphStore {
@@ -207,7 +194,8 @@ impl GraphStore {
     ) -> Vec<ScoredCandidate> {
         let mut results = Vec::new();
         for candidate in candidates {
-            let Some(node) = self.path_index.get(&candidate.path).copied() else {
+            let candidate_key = canonical_path(&candidate.path);
+            let Some(node) = self.path_index.get(&candidate_key).copied() else {
                 continue;
             };
 
@@ -301,14 +289,8 @@ impl GraphStore {
     }
 
     fn resolve_near(&self, value: &str) -> Option<NodeIndex> {
-        if let Some(node) = self.path_index.get(value).copied() {
-            return Some(node);
-        }
-        if let Some(node) = self.path_index.get(&path_with_md(value)).copied() {
-            return Some(node);
-        }
-        let key = normalize_title_key(value);
-        self.title_index.get(&key).copied()
+        let key = canonical_path(value);
+        self.path_index.get(&key).copied()
     }
 }
 
@@ -324,11 +306,15 @@ fn distance_sum(distance_maps: &[HashMap<NodeIndex, f32>], node: NodeIndex) -> O
     Some(total)
 }
 
-fn path_with_md(value: &str) -> String {
-    if value.contains('/') && !value.ends_with(".md") {
-        format!("{}.md", value)
+fn canonical_path(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    if trimmed.to_ascii_lowercase().ends_with(".md") {
+        trimmed.to_string()
     } else {
-        value.to_string()
+        format!("{}.md", trimmed)
     }
 }
 
@@ -346,20 +332,20 @@ mod tests {
             },
             NodeInput {
                 title: "beta".to_string(),
-                path: "beta.md".to_string(),
+                path: "folder/beta.md".to_string(),
             },
         ];
         let edges = vec![EdgeInput {
             from: "alpha.md".to_string(),
-            to: "beta.md".to_string(),
+            to: "folder/beta.md".to_string(),
         }];
 
         store.build(nodes, edges);
 
         assert_eq!(store.graph.node_count(), 2);
         assert_eq!(store.graph.edge_count(), 1);
-        assert!(store.title_index.contains_key("alpha"));
-        assert!(store.path_index.contains_key("beta.md"));
+        assert!(store.path_index.contains_key("alpha.md"));
+        assert!(store.path_index.contains_key("folder/beta.md"));
     }
 
     #[test]

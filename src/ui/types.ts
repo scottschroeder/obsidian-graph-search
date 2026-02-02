@@ -3,6 +3,7 @@ export type QueryAtomKind = "term" | "near" | "tag" | "path" | "whitespace";
 export type QueryAtom = {
 	kind: QueryAtomKind;
 	value: string;
+	display?: string;
 };
 
 export type ScoredCandidate = {

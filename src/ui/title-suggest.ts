@@ -6,12 +6,13 @@ type NoteTitleItem = {
 	title: string;
 	path: string;
 	value: string;
+	display: string;
 	label: string;
 };
 
 export function openTitlePicker(
 	app: App,
-	onSelect: (value: string) => void,
+	onSelect: (value: string, display: string) => void,
 	onCancel?: () => void,
 ) {
 	const modal = new NoteTitleSuggestModal(app, onSelect, onCancel);
@@ -19,14 +20,14 @@ export function openTitlePicker(
 }
 
 class NoteTitleSuggestModal extends FuzzySuggestModal<NoteTitleItem> {
-	private onSelect: (value: string) => void;
+	private onSelect: (value: string, display: string) => void;
 	private onCancel?: () => void;
 	private items: NoteTitleItem[];
 	private submitted = false;
 
 	constructor(
 		app: App,
-		onSelect: (value: string) => void,
+		onSelect: (value: string, display: string) => void,
 		onCancel?: () => void,
 	) {
 		super(app);
@@ -46,7 +47,7 @@ class NoteTitleSuggestModal extends FuzzySuggestModal<NoteTitleItem> {
 
 	onChooseItem(item: NoteTitleItem, _evt: MouseEvent | KeyboardEvent): void {
 		this.submitted = true;
-		this.onSelect(item.value);
+		this.onSelect(item.value, item.display);
 	}
 
 	onClose(): void {
@@ -67,7 +68,8 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 
 	const items = files.map((file) => {
 		const hasDuplicate = (counts.get(file.basename) ?? 0) > 1;
-		const value = hasDuplicate
+		const value = file.path;
+		const display = hasDuplicate
 			? stripMdExtension(file.path)
 			: file.basename;
 		const label = hasDuplicate
@@ -75,8 +77,9 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 			: file.basename;
 		return {
 			title: file.basename,
-			path: hasDuplicate ? stripMdExtension(file.path) : file.basename,
+			path: file.path,
 			value,
+			display,
 			label,
 		};
 	});
@@ -89,8 +92,9 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 	for (const node of dangling.nodes) {
 		items.push({
 			title: node.title,
-			path: node.title,
-			value: node.title,
+			path: node.path,
+			value: node.path,
+			display: node.title,
 			label: `${node.title} (not created)`,
 		});
 	}

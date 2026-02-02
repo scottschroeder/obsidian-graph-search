@@ -8,7 +8,7 @@ pub(crate) struct NodeData {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NodeInput {
-    pub(crate) title: String,
+    pub(crate) title: String, // REVIEW: do we need the `title` here at all?
     pub(crate) path: String,
 }
 

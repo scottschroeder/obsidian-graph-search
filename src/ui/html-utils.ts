@@ -24,11 +24,16 @@ export function buildEditableHtmlFromAtoms(atoms: QueryAtom[]): string {
 			parts.push(escapeHtml(value));
 			return;
 		}
+		const display = atom.display ?? value;
 		parts.push(
 			`<span class="graph-search-chip" contenteditable="false" data-chip-kind="${escapeHtmlAttribute(
 				atom.kind,
-			)}" data-raw-prefix="" data-raw-suffix=""><span class="graph-search-chip-hidden"></span><span class="graph-search-chip-value">${escapeHtml(
+			)}" data-chip-value="${escapeHtmlAttribute(
 				value,
+			)}" data-chip-display="${escapeHtmlAttribute(
+				display,
+			)}" data-raw-prefix="" data-raw-suffix=""><span class="graph-search-chip-hidden"></span><span class="graph-search-chip-value">${escapeHtml(
+				display,
 			)}</span><span class="graph-search-chip-hidden"></span></span>`,
 		);
 	});

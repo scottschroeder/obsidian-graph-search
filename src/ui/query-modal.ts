@@ -10,11 +10,13 @@ import type {
 } from "./types";
 import {
 	buildRawFromAtoms,
+	displayLengthForAtom,
+	displayLengthForAtoms,
 	extractBodyTermsFromAtoms,
-	formatNearValue,
 	formatTagValue,
 	isColonInsert,
 	normalizeAtoms,
+	offsetForAtom,
 } from "./query-utils";
 import { buildEditableHtmlFromAtoms, buildSnippet } from "./html-utils";
 import {
@@ -32,6 +34,7 @@ type GraphSearchPluginApi = {
 	buildGraphIndex(): Promise<void>;
 	buildSearchIndex(): Promise<void>;
 	getSearchContent(path: string): string;
+	getDisplayTitle(path: string): string;
 	getScoreWeights(): ScoreWeights;
 	isDebugMode(): boolean;
 };
@@ -177,10 +180,14 @@ export class GraphQueryModal extends Modal {
 				if (selected === "near-current") {
 					const activeFile = this.app.workspace.getActiveFile();
 					if (activeFile) {
+						const display = this.plugin.getDisplayTitle(
+							activeFile.path,
+						);
 						this.insertChipAtCaret(
 							"near",
-							activeFile.basename,
+							activeFile.path,
 							caret,
+							display,
 						);
 					}
 					return;
@@ -189,9 +196,13 @@ export class GraphQueryModal extends Modal {
 					this.isSuggesting = true;
 					openTitlePicker(
 						this.app,
-						(value) => {
-							const formatted = formatNearValue(value);
-							this.insertChipAtCaret("near", formatted, caret);
+						(path, display) => {
+							this.insertChipAtCaret(
+								"near",
+								path,
+								caret,
+								display,
+							);
 						},
 						() => {
 							this.isSuggesting = false;
@@ -326,7 +337,7 @@ export class GraphQueryModal extends Modal {
 					item.addClass("is-selected");
 				}
 				const titleRow = item.createDiv({ cls: "graph-search-title" });
-				titleRow.setText(entry.title);
+				titleRow.setText(this.plugin.getDisplayTitle(entry.path));
 				const pathRow = item.createDiv({ cls: "graph-search-path" });
 				pathRow.setText(entry.path);
 
@@ -400,6 +411,7 @@ export class GraphQueryModal extends Modal {
 		kind: QueryAtom["kind"],
 		value: string,
 		caretOffset: number,
+		display?: string,
 	) {
 		const cleanedValue = value.trim();
 		const removal = this.removeColonAtOffset(this.atoms, caretOffset - 1);
@@ -408,7 +420,7 @@ export class GraphQueryModal extends Modal {
 			: caretOffset;
 		const result = this.insertAtomAtOffset(
 			removal.atoms,
-			{ kind, value: cleanedValue },
+			{ kind, value: cleanedValue, display },
 			adjustedOffset,
 		);
 		const updated = [...result.atoms];
@@ -433,7 +445,7 @@ export class GraphQueryModal extends Modal {
 		let cursor = 0;
 		for (let index = 0; index < updated.length; index += 1) {
 			const current = updated[index];
-			const length = current.value.length;
+			const length = displayLengthForAtom(current);
 			const end = cursor + length;
 			if (offset <= end) {
 				if (current.kind === "term") {
@@ -443,8 +455,8 @@ export class GraphQueryModal extends Modal {
 						return {
 							atoms: updated,
 							caretOffset:
-								this.offsetForAtom(updated, index) +
-								atom.value.length,
+								offsetForAtom(updated, index) +
+								displayLengthForAtom(atom),
 							index,
 						};
 					}
@@ -453,8 +465,8 @@ export class GraphQueryModal extends Modal {
 						return {
 							atoms: updated,
 							caretOffset:
-								this.offsetForAtom(updated, index + 1) +
-								atom.value.length,
+								offsetForAtom(updated, index + 1) +
+								displayLengthForAtom(atom),
 							index: index + 1,
 						};
 					}
@@ -473,8 +485,8 @@ export class GraphQueryModal extends Modal {
 					return {
 						atoms: updated,
 						caretOffset:
-							this.offsetForAtom(updated, insertIndex) +
-							atom.value.length,
+							offsetForAtom(updated, insertIndex) +
+							displayLengthForAtom(atom),
 						index: insertIndex,
 					};
 				}
@@ -483,8 +495,8 @@ export class GraphQueryModal extends Modal {
 				return {
 					atoms: updated,
 					caretOffset:
-						this.offsetForAtom(updated, insertIndex) +
-						atom.value.length,
+						offsetForAtom(updated, insertIndex) +
+						displayLengthForAtom(atom),
 					index: insertIndex,
 				};
 			}
@@ -494,21 +506,10 @@ export class GraphQueryModal extends Modal {
 		return {
 			atoms: updated,
 			caretOffset:
-				this.offsetForAtom(updated, updated.length - 1) +
-				atom.value.length,
+				offsetForAtom(updated, updated.length - 1) +
+				displayLengthForAtom(atom),
 			index: updated.length - 1,
 		};
-	}
-
-	private offsetForAtom(atoms: QueryAtom[], index: number): number {
-		let offset = 0;
-		for (let i = 0; i < atoms.length; i += 1) {
-			if (i === index) {
-				return offset;
-			}
-			offset += atoms[i].value.length;
-		}
-		return offset;
 	}
 
 	private removeColonAtOffset(
@@ -522,7 +523,7 @@ export class GraphQueryModal extends Modal {
 		let cursor = 0;
 		for (let index = 0; index < updated.length; index += 1) {
 			const current = updated[index];
-			const length = current.value.length;
+			const length = displayLengthForAtom(current);
 			if (offset >= cursor && offset < cursor + length) {
 				if (current.kind !== "term") {
 					return { atoms: updated, removed: false };
@@ -547,7 +548,7 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private displayLength(atoms: QueryAtom[]): number {
-		return atoms.reduce((total, atom) => total + atom.value.length, 0);
+		return displayLengthForAtoms(atoms);
 	}
 
 	private cancelPendingFilter() {

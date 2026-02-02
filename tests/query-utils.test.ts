@@ -5,7 +5,10 @@ import type { QueryAtom } from "../src/ui/types";
 
 import {
 	buildRawFromAtoms,
+	displayLengthForAtom,
+	displayLengthForAtoms,
 	findTokenAtCursor,
+	offsetForAtom,
 	stripMdExtension,
 } from "../src/ui/query-utils";
 import {
@@ -80,6 +83,17 @@ describe("query utils", () => {
 		const div = document.createElement("div");
 		div.innerHTML = html;
 		expect(extractRawFromEditable(div)).toBe("#meeting notes");
+	});
+
+	it("uses display length for chip offsets", () => {
+		const atoms: QueryAtom[] = [
+			{ kind: "near", value: "notes/alpha.md", display: "alpha" },
+			{ kind: "whitespace", value: " " },
+			{ kind: "term", value: "tag" },
+		];
+		expect(displayLengthForAtom(atoms[0])).toBe(5);
+		expect(displayLengthForAtoms(atoms)).toBe(9);
+		expect(offsetForAtom(atoms, 2)).toBe(6);
 	});
 });
 

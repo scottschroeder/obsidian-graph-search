@@ -9,6 +9,7 @@ import {
 	buildDanglingGraphInput,
 	GraphEdgeInput,
 	GraphNodeInput,
+	stripMdExtension,
 } from "./src/link-utils";
 import { collectFrontmatterTags, splitTagString } from "./src/tag-utils";
 
@@ -35,6 +36,7 @@ const DEFAULT_SETTINGS: GraphSearchPluginSettings = {
 export default class GraphSearchPlugin extends Plugin {
 	settings: GraphSearchPluginSettings;
 	private searchContentByPath = new Map<string, string>();
+	private displayTitleByPath = new Map<string, string>();
 
 	async onload() {
 		await this.loadSettings();
@@ -91,6 +93,7 @@ export default class GraphSearchPlugin extends Plugin {
 
 	async buildGraphIndex(): Promise<void> {
 		const files = this.app.vault.getMarkdownFiles();
+		this.displayTitleByPath = buildDisplayTitleMap(files);
 		const nodes: GraphNodeInput[] = files.map((file) => ({
 			title: file.basename,
 			path: file.path,
@@ -135,6 +138,31 @@ export default class GraphSearchPlugin extends Plugin {
 	getSearchContent(path: string): string {
 		return this.searchContentByPath.get(path) ?? "";
 	}
+
+	getDisplayTitle(path: string): string {
+		if (!this.displayTitleByPath.has(path)) {
+			this.displayTitleByPath = buildDisplayTitleMap(
+				this.app.vault.getMarkdownFiles(),
+			);
+		}
+		return this.displayTitleByPath.get(path) ?? path;
+	}
+}
+
+function buildDisplayTitleMap(files: TFile[]): Map<string, string> {
+	const counts = new Map<string, number>();
+	files.forEach((file) => {
+		counts.set(file.basename, (counts.get(file.basename) ?? 0) + 1);
+	});
+	const map = new Map<string, string>();
+	files.forEach((file) => {
+		const hasDuplicate = (counts.get(file.basename) ?? 0) > 1;
+		const display = hasDuplicate
+			? stripMdExtension(file.path)
+			: file.basename;
+		map.set(file.path, display);
+	});
+	return map;
 }
 function collectFileTags(app: App, file: TFile): string[] {
 	const cache = app.metadataCache.getFileCache(file);

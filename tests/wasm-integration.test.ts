@@ -45,7 +45,7 @@ describe("wasm integration", () => {
 			[
 				{ kind: "term", value: "budget" },
 				{ kind: "whitespace", value: " " },
-				{ kind: "near", value: "Budget Meeting" },
+				{ kind: "near", value: "meetings/budget.md" },
 				{ kind: "tag", value: "#meeting" },
 			],
 			{
@@ -58,7 +58,7 @@ describe("wasm integration", () => {
 			},
 		);
 		expect(result.candidate_count).toBe(1);
-		expect(result.near_titles).toEqual(["Budget Meeting"]);
+		expect(result.near_titles).toEqual(["meetings/budget.md"]);
 		expect(result.results.length).toBe(1);
 		expect(result.results[0].path).toBe("meetings/budget.md");
 	});

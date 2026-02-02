@@ -74,8 +74,19 @@ function extractAtomsFromNode(node: Node): QueryAtom[] {
 		const valueEl = el.querySelector(
 			".graph-search-chip-value",
 		) as HTMLElement | null;
-		const value = valueEl?.textContent ?? "";
-		return value.trim().length > 0 ? [{ kind, value: value.trim() }] : [];
+		const displayText = valueEl?.textContent ?? "";
+		const rawValue = el.dataset.chipValue ?? displayText;
+		const rawDisplay = el.dataset.chipDisplay ?? displayText;
+		const value = rawValue.trim();
+		const display = rawDisplay.trim();
+		if (value.length === 0) {
+			return [];
+		}
+		const atom: QueryAtom = { kind, value };
+		if (display.length > 0 && display !== value) {
+			atom.display = display;
+		}
+		return [atom];
 	}
 	const atoms: QueryAtom[] = [];
 	el.childNodes.forEach((child) => {
