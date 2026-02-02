@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 use hashbrown::HashMap;
 use petgraph::{
@@ -38,6 +38,13 @@ pub(crate) struct GraphStore {
     graph: Graph<NodeData, ()>,
     path_index: HashMap<String, NodeIndex>,
     degree_map: HashMap<NodeIndex, usize>,
+    cached_distance_maps: RefCell<Option<CachedDistanceMap>>,
+}
+
+struct CachedDistanceMap {
+    sources: Vec<NodeIndex>,
+    connection_strength: Option<f32>,
+    distance_maps: Rc<Vec<HashMap<NodeIndex, f32>>>,
 }
 
 impl GraphStore {
@@ -46,6 +53,7 @@ impl GraphStore {
             graph: Graph::new(),
             path_index: HashMap::new(),
             degree_map: HashMap::new(),
+            cached_distance_maps: RefCell::new(None),
         }
     }
 
@@ -53,6 +61,7 @@ impl GraphStore {
         self.graph = Graph::new();
         self.path_index.clear();
         self.degree_map.clear();
+        self.cached_distance_maps.borrow_mut().take();
     }
 
     pub(crate) fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) {
@@ -75,6 +84,7 @@ impl GraphStore {
         }
 
         self.degree_map = self.compute_degree_map();
+        self.cached_distance_maps.borrow_mut().take();
     }
 
     pub(crate) fn rank_candidates(
@@ -100,7 +110,7 @@ impl GraphStore {
 
         let distance_maps = self.compute_distance_maps(&sources, &weights);
         let mut results =
-            self.score_candidates_with_distances(candidates, &distance_maps, &weights);
+            self.score_candidates_with_distances(candidates, distance_maps.as_ref(), &weights);
         self.normalize_scores(&mut results, &weights);
         results.sort_by(|a, b| {
             b.total_score
@@ -155,8 +165,18 @@ impl GraphStore {
         &self,
         sources: &[NodeIndex],
         weights: &ScoreWeights,
-    ) -> Vec<HashMap<NodeIndex, f32>> {
+    ) -> Rc<Vec<HashMap<NodeIndex, f32>>> {
         let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
+        let connection_strength = if use_weighted {
+            Some(weights.connection_strength)
+        } else {
+            None
+        };
+        if let Some(cache) = self.cached_distance_maps.borrow().as_ref() {
+            if cache.sources == sources && cache.connection_strength == connection_strength {
+                return Rc::clone(&cache.distance_maps);
+            }
+        }
         let degrees = if use_weighted {
             Some(&self.degree_map)
         } else {
@@ -164,7 +184,7 @@ impl GraphStore {
         };
         let undirected = self.graph.clone().into_edge_type::<Undirected>();
 
-        sources
+        let distance_maps: Vec<HashMap<NodeIndex, f32>> = sources
             .iter()
             .map(|source| {
                 dijkstra(&undirected, *source, None, |edge| {
@@ -183,7 +203,17 @@ impl GraphStore {
                     }
                 })
             })
-            .collect()
+            .collect();
+
+        let distance_maps = Rc::new(distance_maps);
+
+        *self.cached_distance_maps.borrow_mut() = Some(CachedDistanceMap {
+            sources: sources.to_vec(),
+            connection_strength,
+            distance_maps: Rc::clone(&distance_maps),
+        });
+
+        distance_maps
     }
 
     fn score_candidates_with_distances(
@@ -445,6 +475,82 @@ mod tests {
         assert_eq!(degrees.get(spoke1_index).copied().unwrap_or(0), 1);
         assert_eq!(degrees.get(spoke2_index).copied().unwrap_or(0), 1);
         assert_eq!(degrees.get(isolated_index).copied().unwrap_or(0), 0);
+    }
+
+    #[test]
+    fn distance_maps_recompute_for_new_sources() {
+        let mut store = GraphStore::new();
+        let nodes = vec![
+            NodeInput {
+                path: "a.md".to_string(),
+            },
+            NodeInput {
+                path: "b.md".to_string(),
+            },
+            NodeInput {
+                path: "c.md".to_string(),
+            },
+        ];
+        let edges = vec![
+            EdgeInput {
+                from: "a.md".to_string(),
+                to: "b.md".to_string(),
+            },
+            EdgeInput {
+                from: "b.md".to_string(),
+                to: "c.md".to_string(),
+            },
+        ];
+        store.build(nodes, edges);
+
+        let weights = ScoreWeights {
+            distance_weight: 1.0,
+            title_weight: 0.0,
+            body_weight: 0.0,
+            distance_falloff: 0.5,
+            connection_strength: 0.0,
+            distance_curve: "exponential".to_string(),
+        };
+
+        let candidates_from_a = vec![CandidateInput {
+            title: "c".to_string(),
+            path: "c.md".to_string(),
+            title_score: 0.0,
+            body_score: 0.0,
+        }];
+
+        let candidates_from_b = vec![CandidateInput {
+            title: "c".to_string(),
+            path: "c.md".to_string(),
+            title_score: 0.0,
+            body_score: 0.0,
+        }];
+
+        let results_from_a =
+            store.rank_candidates(vec!["a.md".to_string()], candidates_from_a, weights);
+        let results_from_b = store.rank_candidates(
+            vec!["b.md".to_string()],
+            candidates_from_b,
+            ScoreWeights {
+                distance_weight: 1.0,
+                title_weight: 0.0,
+                body_weight: 0.0,
+                distance_falloff: 0.5,
+                connection_strength: 0.0,
+                distance_curve: "exponential".to_string(),
+            },
+        );
+
+        assert_eq!(results_from_a.len(), 1);
+        assert_eq!(results_from_b.len(), 1);
+        assert!(
+            (results_from_a[0].distance_sum - 2.0).abs() < 1e-6,
+            "expected distance 2 from a to c"
+        );
+        assert!(
+            (results_from_b[0].distance_sum - 1.0).abs() < 1e-6,
+            "expected distance 1 from b to c"
+        );
     }
 
     #[test]
