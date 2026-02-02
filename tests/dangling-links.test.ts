@@ -14,9 +14,7 @@ describe("dangling links", () => {
 			existingTitles: ["Plans"],
 		});
 
-		expect(result.nodes).toEqual([
-			{ title: "Waterski", path: "__dangling__/Waterski" },
-		]);
+		expect(result.nodes).toEqual([{ path: "__dangling__/Waterski" }]);
 		expect(result.edges).toEqual([
 			{ from: "Plans.md", to: "__dangling__/Waterski" },
 		]);

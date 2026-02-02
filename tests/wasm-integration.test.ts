@@ -33,10 +33,7 @@ describe("wasm integration", () => {
 		]);
 		expect(stats).toBeNull();
 		const graphStats = wasm.graph_init(
-			[
-				{ title: "Budget Meeting", path: "meetings/budget.md" },
-				{ title: "Project Plan", path: "projects/plan.md" },
-			],
+			[{ path: "meetings/budget.md" }, { path: "projects/plan.md" }],
 			[{ from: "meetings/budget.md", to: "projects/plan.md" }],
 		);
 		expect(graphStats).toBeNull();
@@ -77,10 +74,7 @@ describe("wasm integration", () => {
 			},
 		]);
 		const graphStats = wasm.graph_init(
-			[
-				{ title: "alpha", path: "alpha.md" },
-				{ title: "beta", path: "beta.md" },
-			],
+			[{ path: "alpha.md" }, { path: "beta.md" }],
 			[{ from: "alpha.md", to: "beta.md" }],
 		);
 		expect(graphStats).toBeNull();

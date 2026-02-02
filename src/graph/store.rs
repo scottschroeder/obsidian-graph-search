@@ -57,10 +57,7 @@ impl GraphStore {
 
         for node in nodes {
             let path_key = node.path.clone();
-            let data = NodeData {
-                title: node.title,
-                path: node.path,
-            };
+            let data = NodeData { path: node.path };
             let index = self.graph.add_node(data);
 
             self.path_index.insert(path_key, index);
@@ -311,11 +308,9 @@ mod tests {
         let mut store = GraphStore::new();
         let nodes = vec![
             NodeInput {
-                title: "alpha".to_string(),
                 path: "alpha.md".to_string(),
             },
             NodeInput {
-                title: "beta".to_string(),
                 path: "folder/beta.md".to_string(),
             },
         ];
@@ -337,15 +332,12 @@ mod tests {
         let mut store = GraphStore::new();
         let nodes = vec![
             NodeInput {
-                title: "alpha".to_string(),
                 path: "alpha.md".to_string(),
             },
             NodeInput {
-                title: "beta".to_string(),
                 path: "beta.md".to_string(),
             },
             NodeInput {
-                title: "gamma".to_string(),
                 path: "gamma.md".to_string(),
             },
         ];
@@ -410,19 +402,15 @@ mod tests {
         let mut store = GraphStore::new();
         let nodes = vec![
             NodeInput {
-                title: "hub".to_string(),
                 path: "hub.md".to_string(),
             },
             NodeInput {
-                title: "spoke1".to_string(),
                 path: "spoke1.md".to_string(),
             },
             NodeInput {
-                title: "spoke2".to_string(),
                 path: "spoke2.md".to_string(),
             },
             NodeInput {
-                title: "isolated".to_string(),
                 path: "isolated.md".to_string(),
             },
         ];
@@ -459,15 +447,12 @@ mod tests {
         let mut store = GraphStore::new();
         let nodes = vec![
             NodeInput {
-                title: "start".to_string(),
                 path: "start.md".to_string(),
             },
             NodeInput {
-                title: "hub".to_string(),
                 path: "hub.md".to_string(),
             },
             NodeInput {
-                title: "end".to_string(),
                 path: "end.md".to_string(),
             },
         ];
@@ -570,7 +555,6 @@ mod tests {
     fn resolve_near_matches_path() {
         let mut store = GraphStore::new();
         let nodes = vec![NodeInput {
-            title: "note".to_string(),
             path: "folder/note.md".to_string(),
         }];
         store.build(nodes, Vec::new());
@@ -587,11 +571,9 @@ mod tests {
         let mut store = GraphStore::new();
         let nodes = vec![
             NodeInput {
-                title: "island1".to_string(),
                 path: "island1.md".to_string(),
             },
             NodeInput {
-                title: "island2".to_string(),
                 path: "island2.md".to_string(),
             },
         ];

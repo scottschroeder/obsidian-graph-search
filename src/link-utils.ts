@@ -1,5 +1,4 @@
 export type GraphNodeInput = {
-	title: string;
 	path: string;
 };
 
@@ -83,7 +82,7 @@ export function buildDanglingGraphInput(input: BuildDanglingInput): {
 			const syntheticPath = `${pathPrefix}${cleaned}`;
 			if (!seenNodes.has(syntheticPath)) {
 				seenNodes.add(syntheticPath);
-				nodes.push({ title: cleaned, path: syntheticPath });
+				nodes.push({ path: syntheticPath });
 			}
 			const edgeKey = `${fromPath}::${syntheticPath}`;
 			if (!seenEdges.has(edgeKey)) {

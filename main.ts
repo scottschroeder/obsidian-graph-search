@@ -95,7 +95,6 @@ export default class GraphSearchPlugin extends Plugin {
 		const files = this.app.vault.getMarkdownFiles();
 		this.displayTitleByPath = buildDisplayTitleMap(files);
 		const nodes: GraphNodeInput[] = files.map((file) => ({
-			title: file.basename,
 			path: file.path,
 		}));
 

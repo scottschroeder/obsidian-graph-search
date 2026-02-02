@@ -90,12 +90,15 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 		existingTitles: files.map((file) => file.basename),
 	});
 	for (const node of dangling.nodes) {
+		const display = node.path.startsWith("__dangling__/")
+			? node.path.slice("__dangling__/".length)
+			: node.path;
 		items.push({
-			title: node.title,
+			title: display,
 			path: node.path,
 			value: node.path,
-			display: node.title,
-			label: `${node.title} (not created)`,
+			display,
+			label: `${display} (not created)`,
 		});
 	}
 
