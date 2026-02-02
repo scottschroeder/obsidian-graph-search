@@ -56,10 +56,10 @@ impl GraphStore {
         self.clear();
 
         for node in nodes {
-            let path_key = canonical_path(&node.path);
+            let path_key = node.path.clone();
             let data = NodeData {
                 title: node.title,
-                path: path_key.clone(),
+                path: node.path,
             };
             let index = self.graph.add_node(data);
 
@@ -67,10 +67,8 @@ impl GraphStore {
         }
 
         for edge in edges {
-            let from_key = canonical_path(&edge.from);
-            let to_key = canonical_path(&edge.to);
-            let from = self.path_index.get(&from_key).copied();
-            let to = self.path_index.get(&to_key).copied();
+            let from = self.path_index.get(&edge.from).copied();
+            let to = self.path_index.get(&edge.to).copied();
             if let (Some(from), Some(to)) = (from, to) {
                 self.graph.add_edge(from, to, ());
             }
@@ -194,8 +192,7 @@ impl GraphStore {
     ) -> Vec<ScoredCandidate> {
         let mut results = Vec::new();
         for candidate in candidates {
-            let candidate_key = canonical_path(&candidate.path);
-            let Some(node) = self.path_index.get(&candidate_key).copied() else {
+            let Some(node) = self.path_index.get(&candidate.path).copied() else {
                 continue;
             };
 
@@ -289,8 +286,7 @@ impl GraphStore {
     }
 
     fn resolve_near(&self, value: &str) -> Option<NodeIndex> {
-        let key = canonical_path(value);
-        self.path_index.get(&key).copied()
+        self.path_index.get(value).copied()
     }
 }
 
@@ -304,18 +300,6 @@ fn distance_sum(distance_maps: &[HashMap<NodeIndex, f32>], node: NodeIndex) -> O
         }
     }
     Some(total)
-}
-
-fn canonical_path(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    if trimmed.to_ascii_lowercase().ends_with(".md") {
-        trimmed.to_string()
-    } else {
-        format!("{}.md", trimmed)
-    }
 }
 
 #[cfg(test)]
@@ -406,7 +390,7 @@ mod tests {
             },
         ];
 
-        let results = store.rank_candidates(vec!["alpha".to_string()], candidates, weights);
+        let results = store.rank_candidates(vec!["alpha.md".to_string()], candidates, weights);
         let by_path: HashMap<_, _> = results
             .into_iter()
             .map(|entry| (entry.path.clone(), entry))
@@ -522,7 +506,7 @@ mod tests {
             },
         ];
 
-        let results = store.rank_candidates(vec!["start".to_string()], candidates, weights);
+        let results = store.rank_candidates(vec!["start.md".to_string()], candidates, weights);
         assert_eq!(results.len(), 2);
         let by_path: HashMap<_, _> = results
             .into_iter()
@@ -583,7 +567,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_near_appends_md_extension() {
+    fn resolve_near_matches_path() {
         let mut store = GraphStore::new();
         let nodes = vec![NodeInput {
             title: "note".to_string(),
@@ -591,7 +575,7 @@ mod tests {
         }];
         store.build(nodes, Vec::new());
 
-        let resolved = store.resolve_near("folder/note");
+        let resolved = store.resolve_near("folder/note.md");
         assert!(resolved.is_some());
 
         let node = resolved.unwrap();

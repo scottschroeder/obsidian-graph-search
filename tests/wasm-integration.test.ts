@@ -85,7 +85,7 @@ describe("wasm integration", () => {
 		);
 		expect(graphStats).toBeNull();
 		const result = wasm.graph_query_from_atoms(
-			[{ kind: "near", value: "alpha" }],
+			[{ kind: "near", value: "alpha.md" }],
 			{
 				distance_weight: 1,
 				title_weight: 1,

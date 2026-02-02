@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct NodeData {
-    pub(crate) title: String,
+    pub(crate) title: String, // REVIEW: do we need this `title here?
     pub(crate) path: String,
 }
 
