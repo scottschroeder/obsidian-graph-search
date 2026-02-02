@@ -37,6 +37,7 @@ pub(crate) struct ScoreWeights {
 pub(crate) struct GraphStore {
     graph: Graph<NodeData, ()>,
     path_index: HashMap<String, NodeIndex>,
+    degree_map: HashMap<NodeIndex, usize>,
 }
 
 impl GraphStore {
@@ -44,12 +45,14 @@ impl GraphStore {
         Self {
             graph: Graph::new(),
             path_index: HashMap::new(),
+            degree_map: HashMap::new(),
         }
     }
 
     pub(crate) fn clear(&mut self) {
         self.graph = Graph::new();
         self.path_index.clear();
+        self.degree_map.clear();
     }
 
     pub(crate) fn build(&mut self, nodes: Vec<NodeInput>, edges: Vec<EdgeInput>) {
@@ -70,6 +73,8 @@ impl GraphStore {
                 self.graph.add_edge(from, to, ());
             }
         }
+
+        self.degree_map = self.compute_degree_map();
     }
 
     pub(crate) fn rank_candidates(
@@ -153,7 +158,7 @@ impl GraphStore {
     ) -> Vec<HashMap<NodeIndex, f32>> {
         let use_weighted = weights.connection_strength.abs() >= f32::EPSILON;
         let degrees = if use_weighted {
-            Some(self.degree_map())
+            Some(&self.degree_map)
         } else {
             None
         };
@@ -264,7 +269,7 @@ impl GraphStore {
         }
     }
 
-    fn degree_map(&self) -> HashMap<NodeIndex, usize> {
+    fn compute_degree_map(&self) -> HashMap<NodeIndex, usize> {
         let mut neighbors: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
         for edge in self.graph.edge_references() {
             let from = edge.source();
@@ -430,7 +435,7 @@ mod tests {
         ];
         store.build(nodes, edges);
 
-        let degrees = store.degree_map();
+        let degrees = store.degree_map;
         let hub_index = store.path_index.get("hub.md").unwrap();
         let spoke1_index = store.path_index.get("spoke1.md").unwrap();
         let spoke2_index = store.path_index.get("spoke2.md").unwrap();
