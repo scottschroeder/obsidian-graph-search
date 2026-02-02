@@ -5,11 +5,10 @@ use petgraph::{
     algo::dijkstra,
     graph::{Graph, NodeIndex},
     visit::EdgeRef,
-    Undirected,
 };
 use serde::{Deserialize, Serialize};
 
-use super::model::{EdgeInput, NodeData, NodeInput};
+use super::model::{EdgeInput, EdgeKind, NodeData, NodeInput};
 
 use crate::models::CandidateInput;
 
@@ -35,7 +34,7 @@ pub(crate) struct ScoreWeights {
 }
 
 pub(crate) struct GraphStore {
-    graph: Graph<NodeData, ()>,
+    graph: Graph<NodeData, EdgeKind>,
     path_index: HashMap<String, NodeIndex>,
     degree_map: HashMap<NodeIndex, usize>,
     cached_distance_maps: RefCell<Option<CachedDistanceMap>>,
@@ -75,12 +74,22 @@ impl GraphStore {
             self.path_index.insert(path_key, index);
         }
 
+        let mut edge_map: HashMap<(NodeIndex, NodeIndex), EdgeKind> = HashMap::new();
         for edge in edges {
             let from = self.path_index.get(&edge.from).copied();
             let to = self.path_index.get(&edge.to).copied();
             if let (Some(from), Some(to)) = (from, to) {
-                self.graph.add_edge(from, to, ());
+                // Insert Explicit connection, overwriting any possible Implicit edge
+                edge_map.insert((from, to), EdgeKind::Explicit);
+                // if there is no explicit edge connecting these nodes, create an implicit
+                // connection
+                edge_map.entry((to, from)).or_insert(EdgeKind::Implicit);
             }
+        }
+
+        // Send our edge_map into the graph
+        for ((from, to), kind) in edge_map {
+            self.graph.add_edge(from, to, kind);
         }
 
         self.degree_map = self.compute_degree_map();
@@ -182,12 +191,10 @@ impl GraphStore {
         } else {
             None
         };
-        let undirected = self.graph.clone().into_edge_type::<Undirected>();
-
         let distance_maps: Vec<HashMap<NodeIndex, f32>> = sources
             .iter()
             .map(|source| {
-                dijkstra(&undirected, *source, None, |edge| {
+                dijkstra(&self.graph, *source, None, |edge| {
                     if let Some(degrees) = degrees.as_ref() {
                         let deg_a = *degrees.get(&edge.source()).unwrap_or(&0);
                         let deg_b = *degrees.get(&edge.target()).unwrap_or(&0);
@@ -357,7 +364,7 @@ mod tests {
         store.build(nodes, edges);
 
         assert_eq!(store.graph.node_count(), 2);
-        assert_eq!(store.graph.edge_count(), 1);
+        assert_eq!(store.graph.edge_count(), 2);
         assert!(store.path_index.contains_key("alpha.md"));
         assert!(store.path_index.contains_key("folder/beta.md"));
     }
