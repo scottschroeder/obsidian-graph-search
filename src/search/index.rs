@@ -18,7 +18,6 @@ pub(crate) struct SearchDocumentInput {
 struct SearchDocument {
     title: String,
     path: String,
-    tokens: HashSet<String>,
     title_tokens: HashSet<String>,
     body_tokens: HashSet<String>,
     tags: HashSet<String>,
@@ -49,26 +48,14 @@ impl SearchStore {
         self.clear();
 
         for (doc_id, doc) in docs.into_iter().enumerate() {
-            let mut tokens = HashSet::new();
             let mut title_tokens = HashSet::new();
             let mut body_tokens = HashSet::new();
             let mut tags = HashSet::new();
 
-            let title_terms = tokenize(&doc.title);
-            tokens.extend(title_terms.iter().cloned());
-            title_tokens.extend(title_terms);
-
-            let title_composites = extract_composite_tokens(&doc.title);
-            tokens.extend(title_composites.iter().cloned());
-            title_tokens.extend(title_composites);
-
-            let body_terms = tokenize(&doc.body);
-            tokens.extend(body_terms.iter().cloned());
-            body_tokens.extend(body_terms);
-
-            let body_composites = extract_composite_tokens(&doc.body);
-            tokens.extend(body_composites.iter().cloned());
-            body_tokens.extend(body_composites);
+            title_tokens.extend(tokenize(&doc.title));
+            title_tokens.extend(extract_composite_tokens(&doc.title));
+            body_tokens.extend(tokenize(&doc.body));
+            body_tokens.extend(extract_composite_tokens(&doc.body));
 
             if let Some(input_tags) = doc.tags {
                 for tag in input_tags {
@@ -81,15 +68,24 @@ impl SearchStore {
             let document = SearchDocument {
                 title: doc.title,
                 path: doc.path,
-                tokens,
                 title_tokens,
                 body_tokens,
                 tags,
             };
             self.docs.push(document);
 
-            for token in self.docs[doc_id].tokens.iter().cloned() {
-                self.index.entry(token).or_default().push(doc_id);
+            for token in self.docs[doc_id].title_tokens.iter().cloned() {
+                let postings = self.index.entry(token).or_default();
+                if postings.last().copied() != Some(doc_id) {
+                    postings.push(doc_id);
+                }
+            }
+
+            for token in self.docs[doc_id].body_tokens.iter().cloned() {
+                let postings = self.index.entry(token).or_default();
+                if postings.last().copied() != Some(doc_id) {
+                    postings.push(doc_id);
+                }
             }
         }
 
@@ -570,5 +566,19 @@ mod tests {
         let matches = store.filter_by_path("projects", None);
         let expected: HashSet<usize> = std::iter::once(1usize).collect();
         assert_eq!(matches, expected);
+    }
+
+    #[test]
+    fn index_dedupes_title_and_body_tokens() {
+        let mut store = SearchStore::new();
+        store.build(vec![SearchDocumentInput {
+            title: "Shared Token".to_string(),
+            path: "notes/shared.md".to_string(),
+            body: "Shared token appears in body".to_string(),
+            tags: Some(vec![]),
+        }]);
+
+        let postings = store.index.get("shared").cloned().unwrap_or_default();
+        assert_eq!(postings, vec![0]);
     }
 }
