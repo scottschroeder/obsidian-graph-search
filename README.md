@@ -11,37 +11,41 @@ Search and rank notes by graph link proximity combined with title and body relev
 ## How to use
 
 1. Enable the plugin in Obsidian.
-2. Run the command `Graph search`.
+2. Run the command `Graph query` (Command Palette).
 3. Type a query and press Enter.
 
 ## Query syntax
 
-- Plain terms: `budget q3`
-- Filters: type `:` to insert chips for near, tag, or path
-
-### Example
+- Plain terms: `budget`
+- Filters: type `:` to open a chip selector dialog for filter chips `near`, `tag`, or `path`
 
 ```
-budget [near: Bob] [tag: #meeting]
+budget q3 [near: Bob] [tag: #meeting]
 ```
+
+This will search for notes that have the word "budget" and the tag `#meeting`. So far that's just a pretty normal search plugin. The neat part is the `near` option, which will score results based on how close they are in your graph to a note `Bob.md`.
+
+This works with multiple notes too, so you could combine `[near: Books] [near: Brian]` to find that book Brian recommended to you.
 
 ## Scoring behavior
 
-- Results must match tag/path filters.
-- When near chips are used, only notes connected in the graph are included.
-- Distance 0 and 1 are weighted equally; deeper hops decay exponentially by `distanceFalloff`.
-- Total score = distance + title + body (weights applied in settings).
+The farther a note is in the graph, the lower its score. Also, notes with a lot of links will reduce the score more than a note with only a few links. This prevents a note like `2026.md` with hundreds of links from connecting everything and drowning out meaningful links.
 
 ## Debug mode
 
-- Settings → Graph Search → Advanced Scoring → Debug mode
+- Settings → Graph Search → Advanced scoring → Debug mode
 - When enabled, previews show distance/title/body/total score breakdowns and the status line.
+
+# Development
+
+> [!NOTE]
+> AI Disclaimer: A lot of the frontend/TypeScript is AI generated (I promise it would be worse if I wrote it). I used some AI tools for the Rust backend too, but that code was much more carefully written and reviewed.
 
 ## Known limitations
 
 - Tag collection uses Obsidian's internal `getTags()` API which may change in future versions.
 
-## Development environment setup
+## Development Environment
 
 ### Prerequisites
 
