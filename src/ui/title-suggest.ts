@@ -1,6 +1,6 @@
 import { App, FuzzySuggestModal } from "obsidian";
 
-import { buildDanglingGraphInput, stripMdExtension } from "../link-utils";
+import { buildDanglingGraphInput, stripMdExtension } from "./link-utils";
 
 type NoteTitleItem = {
 	title: string;

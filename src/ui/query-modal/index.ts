@@ -1,12 +1,12 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 
-import type { QueryAtom, ScoredCandidate } from "./types";
-import { extractBodyTermsFromAtoms } from "./query-utils";
-import { QueryInputController } from "./query-modal/input-controller";
-import { GraphResultsRenderer } from "./query-modal/results-renderer";
-import { QuerySuggestController } from "./query-modal/suggest-controller";
-import type { GraphSearchPluginApi } from "./query-modal/plugin-api";
-import { GraphQueryEngine } from "./query-modal/query-engine";
+import type { ObsidianHTMLElement, QueryAtom, ScoredCandidate } from "../types";
+import { extractBodyTermsFromAtoms } from "../query-utils";
+import { QueryInputController } from "./input-controller";
+import { GraphResultsRenderer } from "./results-renderer";
+import { QuerySuggestController } from "./suggest-controller";
+import type { GraphSearchPluginApi } from "./plugin-api";
+import { GraphQueryEngine } from "./query-engine";
 
 export class GraphQueryModal extends Modal {
 	private static readonly DEBOUNCE_MS = 20;
@@ -14,8 +14,8 @@ export class GraphQueryModal extends Modal {
 
 	private plugin: GraphSearchPluginApi;
 	private inputEl?: HTMLDivElement;
-	private resultsEl?: HTMLDivElement;
-	private statusEl?: HTMLDivElement;
+	private resultsEl?: ObsidianHTMLElement;
+	private statusEl?: ObsidianHTMLElement;
 	private results: ScoredCandidate[] = [];
 	private selectedIndex = -1;
 	private debounceHandle?: number;
@@ -55,10 +55,14 @@ export class GraphQueryModal extends Modal {
 		this.inputEl.setAttribute("spellcheck", "false");
 		this.inputEl.setAttribute("data-placeholder", "");
 
-		this.statusEl = contentEl.createDiv({ cls: "graph-search-status" });
-		this.resultsEl = contentEl.createDiv({
-			cls: "graph-search-results prompt-results",
-		});
+		this.statusEl = toObsidianEl(
+			contentEl.createDiv({ cls: "graph-search-status" }),
+		);
+		this.resultsEl = toObsidianEl(
+			contentEl.createDiv({
+				cls: "graph-search-results prompt-results",
+			}),
+		);
 
 		this.inputEl.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
@@ -111,34 +115,8 @@ export class GraphQueryModal extends Modal {
 
 		if (this.resultsEl && this.statusEl) {
 			this.resultsRenderer = new GraphResultsRenderer({
-				resultsEl: this.resultsEl as unknown as HTMLElement & {
-					empty(): void;
-					setText(text: string): void;
-					show(): void;
-					hide(): void;
-					createEl(
-						tag: string,
-						options?: { text?: string; cls?: string },
-					): HTMLElement;
-					createDiv(options?: {
-						cls?: string;
-						text?: string;
-					}): HTMLDivElement;
-				},
-				statusEl: this.statusEl as unknown as HTMLElement & {
-					empty(): void;
-					setText(text: string): void;
-					show(): void;
-					hide(): void;
-					createEl(
-						tag: string,
-						options?: { text?: string; cls?: string },
-					): HTMLElement;
-					createDiv(options?: {
-						cls?: string;
-						text?: string;
-					}): HTMLDivElement;
-				},
+				resultsEl: this.resultsEl,
+				statusEl: this.statusEl,
 				plugin: this.plugin,
 				maxResults: GraphQueryModal.MAX_RESULTS,
 				onSelectIndex: (index) => {
@@ -303,4 +281,8 @@ function openFileByPath(app: App, path: string) {
 	} else {
 		new Notice(`File not found: ${path}`);
 	}
+}
+
+function toObsidianEl(element: HTMLElement): ObsidianHTMLElement {
+	return element as ObsidianHTMLElement;
 }

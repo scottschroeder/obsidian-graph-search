@@ -6,6 +6,18 @@ export type QueryAtom = {
 	display?: string;
 };
 
+export type ObsidianHTMLElement = HTMLElement & {
+	empty(): void;
+	setText(text: string): void;
+	show(): void;
+	hide(): void;
+	createEl(
+		tag: string,
+		options?: { text?: string; cls?: string },
+	): HTMLElement;
+	createDiv(options?: { cls?: string; text?: string }): HTMLDivElement;
+};
+
 export type ScoredCandidate = {
 	title: string;
 	path: string;

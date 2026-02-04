@@ -1,5 +1,5 @@
 import type { QueryAtom } from "./types";
-import { stripMdExtension } from "../link-utils";
+import { stripMdExtension } from "./link-utils";
 
 export function normalizeAtoms(atoms: QueryAtom[]): QueryAtom[] {
 	const normalized: QueryAtom[] = [];

@@ -1,18 +1,6 @@
-import type { ScoredCandidate } from "../types";
+import type { ObsidianHTMLElement, ScoredCandidate } from "../types";
 import { buildSnippet, buildSnippetNodes } from "../snippet-utils";
 import type { GraphSearchPluginApi } from "./plugin-api";
-
-type ObsidianHTMLElement = HTMLElement & {
-	empty(): void;
-	setText(text: string): void;
-	show(): void;
-	hide(): void;
-	createEl(
-		tag: string,
-		options?: { text?: string; cls?: string },
-	): HTMLElement;
-	createDiv(options?: { cls?: string; text?: string }): HTMLDivElement;
-};
 
 type ResultsRendererOptions = {
 	resultsEl: ObsidianHTMLElement;

@@ -9,14 +9,14 @@ import {
 	buildDanglingGraphInput,
 	GraphEdgeInput,
 	GraphNodeInput,
-} from "./src/link-utils";
-import { buildDisplayTitleMap } from "./src/metadata/display-titles";
-import { collectFileTags } from "./src/metadata/tags";
+} from "./src/ui/link-utils";
+import { buildDisplayTitleMap } from "./src/ui/metadata/display-titles";
+import { collectFileTags } from "./src/ui/metadata/tags";
 import {
 	DEFAULT_SETTINGS,
 	GraphSearchPluginSettings,
 	GraphSearchSettingTab,
-} from "./src/settings";
+} from "./src/ui/settings";
 
 export default class GraphSearchPlugin extends Plugin {
 	settings: GraphSearchPluginSettings;
