@@ -9,7 +9,7 @@ PLUGIN_DIR := $(VAULT_DIR)/.obsidian/plugins/$(PLUGIN_ID)
 
 RUST_SRC := $(shell find src -name \*.rs -print)
 
-.PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test
+.PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test version-check
 
 all: build
 
@@ -64,3 +64,6 @@ js-test:
 clean:
 	$(CARGO) clean
 	rm -rf pkg main.js
+
+version-check:
+	$(CARGO) run --package xtask -- version check

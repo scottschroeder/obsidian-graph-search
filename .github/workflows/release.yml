@@ -1,51 +1,63 @@
-name: Release
+name: Release Obsidian plugin
 
 on:
-  push:
-    tags:
-      - "v*"
+    push:
+        tags:
+            - "*"
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: yarn
+            - name: Check tag format
+              id: tag_check
+              run: |
+                  tag="${GITHUB_REF#refs/tags/}"
+                  if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo "is_release=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "::warning::Tag '$tag' does not match X.Y.Z; skipping release steps."
+                    echo "is_release=false" >> "$GITHUB_OUTPUT"
+                  fi
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+            - name: Use Node.js
+              if: steps.tag_check.outputs.is_release == 'true'
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18.x"
 
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
+            - name: Use Rust
+              if: steps.tag_check.outputs.is_release == 'true'
+              uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+            - name: Verify versions
+              if: steps.tag_check.outputs.is_release == 'true'
+              run: |
+                  make version-check
+                  tag="${GITHUB_REF#refs/tags/}"
+                  manifest_version=$(node -p "require('./manifest.json').version")
+                  if [ "$tag" != "$manifest_version" ]; then
+                    echo "Tag $tag does not match manifest.json version $manifest_version"
+                    exit 1
+                  fi
 
-      - name: Build plugin
-        run: yarn build
+            - name: Build plugin
+              if: steps.tag_check.outputs.is_release == 'true'
+              run: |
+                  yarn install
+                  yarn run build
 
-      - name: Prepare release bundle
-        run: |
-          rm -rf release
-          mkdir -p release/graph-search
-          cp main.js manifest.json styles.css release/graph-search/
-          (cd release && zip -r "graph-search-${GITHUB_REF_NAME}.zip" graph-search)
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            main.js
-            manifest.json
-            styles.css
-            release/graph-search-${{ github.ref_name }}.zip
+            - name: Create release
+              if: steps.tag_check.outputs.is_release == 'true'
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  tag="${GITHUB_REF#refs/tags/}"
+                  gh release create "$tag" \
+                    --title="$tag" \
+                    --draft \
+                    main.js manifest.json styles.css

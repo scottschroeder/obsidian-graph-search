@@ -41,7 +41,6 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 - Right now the search functionality is fairly basic, and the search weights are just numbers that "felt right". I think a lot more could be done here to bring search up to par.
 - The index/graph are built from scratch every time the search modal is opened. On my vault(s) this is imperceptibly fast and avoids any issues with old data. There is probably a design where we incrementally update the index/graphs as changes are made which would be more efficient, if more complex. Practically this only makes sense if we encounter a vault large enough that the indexing delay becomes noticable or inconvenient.
 
-
 # Development
 
 > [!NOTE]
@@ -65,3 +64,21 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 - `make install` (build and copy to your vault)
 - `VAULT_DIR=~/Documents/notes PLUGIN_ID=graph-search make install`
 - `make test`
+
+## Release
+
+1. Bump versions to `X.Y.Z`:
+    ```bash
+    cargo run --package xtask -- version bump X.Y.Z
+    ```
+2. Validate versions:
+    ```bash
+    make version-check
+    ```
+3. Tag the release with `X.Y.Z` (no `v` prefix) and push the tag.
+4. The GitHub Actions workflow will build and create a draft release when the tag matches `X.Y.Z` and `manifest.json`.
+
+Notes:
+
+- `manifest.json`, `package.json`, and `Cargo.toml` must match exactly.
+- `versions.json` must include the release version with the current `minAppVersion`.

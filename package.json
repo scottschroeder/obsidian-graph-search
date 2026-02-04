@@ -1,20 +1,6 @@
 {
-	"name": "graph-search",
-	"description": "Graph-aware Obsidian search with proximity scoring.",
-	"version": "1.0.0",
-	"main": "main.js",
-	"scripts": {
-		"wasm": "wasm-pack build --target web && node -e \"require('fs').rmSync('pkg/obsidian_rust_plugin_bg.wasm.d.ts', { force: true })\"",
-		"dev": "yarn run wasm && node esbuild.config.mjs",
-		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"lint": "tsc -noEmit -skipLibCheck",
-		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
-		"test": "yarn run wasm && vitest run",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
-	},
-	"keywords": [],
 	"author": "",
-	"license": "MIT",
+	"description": "Graph-aware Obsidian search with proximity scoring.",
 	"devDependencies": {
 		"@codemirror/state": "^6.0.0",
 		"@codemirror/view": "^6.0.0",
@@ -29,5 +15,18 @@
 		"tslib": "2.4.0",
 		"typescript": "4.7.4",
 		"vitest": "^2.1.9"
-	}
+	},
+	"keywords": [],
+	"license": "MIT",
+	"main": "main.js",
+	"name": "graph-search",
+	"scripts": {
+		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "yarn run wasm && node esbuild.config.mjs",
+		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
+		"lint": "tsc -noEmit -skipLibCheck",
+		"test": "yarn run wasm && vitest run",
+		"wasm": "wasm-pack build --target web && node -e \"require('fs').rmSync('pkg/obsidian_rust_plugin_bg.wasm.d.ts', { force: true })\""
+	},
+	"version": "0.4.0"
 }

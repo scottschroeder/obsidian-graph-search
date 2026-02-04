@@ -1,10 +1,10 @@
 {
-	"id": "graph-search",
-	"name": "Graph Search",
-	"version": "1.0.0",
-	"minAppVersion": "1.11.5",
-	"description": "Search and rank notes by graph link proximity combined with title and body relevance.",
 	"author": "Scott Schroeder",
 	"authorUrl": "https://github.com/scottschroeder",
-	"isDesktopOnly": false
+	"description": "Search and rank notes by graph link proximity combined with title and body relevance.",
+	"id": "graph-search",
+	"isDesktopOnly": false,
+	"minAppVersion": "1.11.5",
+	"name": "Graph Search",
+	"version": "0.4.0"
 }
