@@ -1,4 +1,10 @@
 import type { QueryAtom, QueryAtomKind } from "../types";
+import {
+	chipRawLength,
+	getChipParts,
+	getChipValueElement,
+	isChipElement,
+} from "./chip-dom-utils";
 
 export function extractAtomsFromEditable(root: HTMLElement): QueryAtom[] {
 	const atoms: QueryAtom[] = [];
@@ -109,18 +115,12 @@ function extractAtomsFromNode(node: Node): QueryAtom[] {
 			return { kind: "term" as const, value: token };
 		});
 	}
-	if (node.nodeType !== Node.ELEMENT_NODE) {
-		return [];
-	}
-	const el = node as HTMLElement;
-	if (el.classList.contains("graph-search-chip")) {
-		const kind = (el.dataset.chipKind ?? "term") as QueryAtomKind;
-		const valueEl = el.querySelector(
-			".graph-search-chip-value",
-		) as HTMLElement | null;
+	if (isChipElement(node)) {
+		const kind = (node.dataset.chipKind ?? "term") as QueryAtomKind;
+		const valueEl = getChipValueElement(node);
 		const displayText = valueEl?.textContent ?? "";
-		const rawValue = el.dataset.chipValue ?? displayText;
-		const rawDisplay = el.dataset.chipDisplay ?? displayText;
+		const rawValue = node.dataset.chipValue ?? displayText;
+		const rawDisplay = node.dataset.chipDisplay ?? displayText;
 		const value = rawValue.trim();
 		const display = rawDisplay.trim();
 		if (value.length === 0) {
@@ -132,6 +132,10 @@ function extractAtomsFromNode(node: Node): QueryAtom[] {
 		}
 		return [atom];
 	}
+	if (node.nodeType !== Node.ELEMENT_NODE) {
+		return [];
+	}
+	const el = node as HTMLElement;
 	const atoms: QueryAtom[] = [];
 	el.childNodes.forEach((child) => {
 		atoms.push(...extractAtomsFromNode(child));
@@ -143,14 +147,14 @@ function extractRawFromNode(node: Node): string {
 	if (node.nodeType === Node.TEXT_NODE) {
 		return node.textContent ?? "";
 	}
+	if (isChipElement(node)) {
+		const parts = getChipParts(node);
+		return parts.prefix + parts.value + parts.suffix;
+	}
 	if (node.nodeType !== Node.ELEMENT_NODE) {
 		return "";
 	}
 	const el = node as HTMLElement;
-	if (el.classList.contains("graph-search-chip")) {
-		const parts = getChipParts(el);
-		return parts.prefix + parts.value + parts.suffix;
-	}
 	let raw = "";
 	el.childNodes.forEach((child) => {
 		raw += extractRawFromNode(child);
@@ -195,16 +199,16 @@ function computeRawOffset(
 		if (node.nodeType !== Node.ELEMENT_NODE) {
 			return;
 		}
-		const el = node as HTMLElement;
-		if (el.classList.contains("graph-search-chip")) {
-			if (el.contains(targetNode)) {
-				offset += rawOffsetWithinChip(el, targetNode, targetOffset);
+		if (isChipElement(node)) {
+			if (node.contains(targetNode)) {
+				offset += rawOffsetWithinChip(node, targetNode, targetOffset);
 				found = true;
 				return;
 			}
-			offset += chipRawLength(el);
+			offset += chipRawLength(node);
 			return;
 		}
+		const el = node as HTMLElement;
 		el.childNodes.forEach((child) => walk(child));
 	};
 	root.childNodes.forEach((child) => walk(child));
@@ -217,9 +221,7 @@ function rawOffsetWithinChip(
 	targetOffset: number,
 ): number {
 	const parts = getChipParts(chip);
-	const valueEl = chip.querySelector(
-		".graph-search-chip-value",
-	) as HTMLElement | null;
+	const valueEl = getChipValueElement(chip);
 	if (!valueEl) {
 		return parts.prefix.length;
 	}
@@ -271,34 +273,15 @@ function rawLength(node: Node): number {
 	if (node.nodeType !== Node.ELEMENT_NODE) {
 		return 0;
 	}
-	const el = node as HTMLElement;
-	if (el.classList.contains("graph-search-chip")) {
-		return chipRawLength(el);
+	if (isChipElement(node)) {
+		return chipRawLength(node);
 	}
+	const el = node as HTMLElement;
 	let length = 0;
 	el.childNodes.forEach((child) => {
 		length += rawLength(child);
 	});
 	return length;
-}
-
-function chipRawLength(chip: HTMLElement): number {
-	const parts = getChipParts(chip);
-	return parts.prefix.length + parts.value.length + parts.suffix.length;
-}
-
-function getChipParts(chip: HTMLElement): {
-	prefix: string;
-	value: string;
-	suffix: string;
-} {
-	const prefix = chip.dataset.rawPrefix ?? "";
-	const suffix = chip.dataset.rawSuffix ?? "";
-	const valueEl = chip.querySelector(
-		".graph-search-chip-value",
-	) as HTMLElement | null;
-	const value = valueEl?.textContent ?? "";
-	return { prefix, value, suffix };
 }
 
 function findNodeAtRawOffset(
@@ -324,14 +307,13 @@ function findNodeAtRawOffset(
 		if (node.nodeType !== Node.ELEMENT_NODE) {
 			return;
 		}
-		const el = node as HTMLElement;
-		if (el.classList.contains("graph-search-chip")) {
-			const parts = getChipParts(el);
+		if (isChipElement(node)) {
+			const parts = getChipParts(node);
 			const prefixLen = parts.prefix.length;
 			const valueLen = parts.value.length;
 			const totalLen = prefixLen + valueLen + parts.suffix.length;
 			if (remaining === 0) {
-				const prev = el.previousSibling;
+				const prev = node.previousSibling;
 				if (prev && prev.nodeType === Node.TEXT_NODE) {
 					result = {
 						node: prev,
@@ -339,15 +321,15 @@ function findNodeAtRawOffset(
 					};
 					return;
 				}
-				const parent = el.parentNode;
+				const parent = node.parentNode;
 				if (parent) {
-					const index = Array.from(parent.childNodes).indexOf(el);
+					const index = Array.from(parent.childNodes).indexOf(node);
 					result = { node: parent, offset: Math.max(index, 0) };
 					return;
 				}
 			}
 			if (remaining > 0 && remaining < totalLen && preferBeforeChip) {
-				const prev = el.previousSibling;
+				const prev = node.previousSibling;
 				if (prev && prev.nodeType === Node.TEXT_NODE) {
 					result = {
 						node: prev,
@@ -355,9 +337,9 @@ function findNodeAtRawOffset(
 					};
 					return;
 				}
-				const parent = el.parentNode;
+				const parent = node.parentNode;
 				if (parent) {
-					const index = Array.from(parent.childNodes).indexOf(el);
+					const index = Array.from(parent.childNodes).indexOf(node);
 					result = { node: parent, offset: Math.max(index, 0) };
 					return;
 				}
@@ -366,15 +348,15 @@ function findNodeAtRawOffset(
 				// If we're positioned within the chip's bounds, we should move to
 				// the appropriate text node after the chip
 				// But we need to position at the correct place for "and" text
-				const next = el.nextSibling;
+				const next = node.nextSibling;
 				if (next && next.nodeType === Node.TEXT_NODE) {
 					result = { node: next, offset: 0 };
 					return;
 				}
 				// If there's no text node after, we still want to position properly
-				const parent = el.parentNode;
+				const parent = node.parentNode;
 				if (parent) {
-					const index = Array.from(parent.childNodes).indexOf(el);
+					const index = Array.from(parent.childNodes).indexOf(node);
 					// Position after the chip in parent
 					result = { node: parent, offset: Math.max(index + 1, 0) };
 					return;
@@ -383,6 +365,7 @@ function findNodeAtRawOffset(
 			remaining -= totalLen;
 			return;
 		}
+		const el = node as HTMLElement;
 		el.childNodes.forEach((child) => walk(child));
 	};
 	root.childNodes.forEach((child) => walk(child));
@@ -396,14 +379,12 @@ function findEndPosition(node: Node): { node: Node; offset: number } {
 	if (node.nodeType !== Node.ELEMENT_NODE) {
 		return { node, offset: 0 };
 	}
-	const el = node as HTMLElement;
-	if (el.classList.contains("graph-search-chip")) {
-		const valueEl = el.querySelector(
-			".graph-search-chip-value",
-		) as HTMLElement | null;
-		const targetNode = valueEl?.firstChild ?? valueEl ?? el;
+	if (isChipElement(node)) {
+		const valueEl = getChipValueElement(node);
+		const targetNode = valueEl?.firstChild ?? valueEl ?? node;
 		return { node: targetNode, offset: valueEl?.textContent?.length ?? 0 };
 	}
+	const el = node as HTMLElement;
 	if (el.childNodes.length === 0) {
 		return { node: el, offset: 0 };
 	}

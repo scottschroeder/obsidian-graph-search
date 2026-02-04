@@ -1,13 +1,12 @@
 import { App, Modal, Notice, TFile } from "obsidian";
 
-import * as wasm from "../../pkg/obsidian_rust_plugin";
-
-import type { GraphQueryResult, QueryAtom, ScoredCandidate } from "./types";
+import type { QueryAtom, ScoredCandidate } from "./types";
 import { extractBodyTermsFromAtoms } from "./query-utils";
 import { QueryInputController } from "./query-modal/input-controller";
 import { GraphResultsRenderer } from "./query-modal/results-renderer";
 import { QuerySuggestController } from "./query-modal/suggest-controller";
 import type { GraphSearchPluginApi } from "./query-modal/plugin-api";
+import { GraphQueryEngine } from "./query-modal/query-engine";
 
 export class GraphQueryModal extends Modal {
 	private static readonly DEBOUNCE_MS = 20;
@@ -20,10 +19,7 @@ export class GraphQueryModal extends Modal {
 	private results: ScoredCandidate[] = [];
 	private selectedIndex = -1;
 	private debounceHandle?: number;
-	private graphReady = false;
-	private searchReady = false;
-	private buildPromise?: Promise<void>;
-	private isClosed = false;
+	private queryEngine: GraphQueryEngine;
 	private lastCandidateCount = 0;
 	private lastNearTitles: string[] = [];
 	private lastSearchTerms: string[] = [];
@@ -38,16 +34,16 @@ export class GraphQueryModal extends Modal {
 	constructor(app: App, plugin: GraphSearchPluginApi) {
 		super(app);
 		this.plugin = plugin;
+		this.queryEngine = new GraphQueryEngine(plugin);
 	}
 
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.addClass("prompt");
-		this.isClosed = false;
-		this.graphReady = false;
-		this.searchReady = false;
-		this.startBuild();
+		this.queryEngine.startBuild()?.catch(() => {
+			new Notice("Graph index build failed.");
+		});
 
 		const inputWrapper = contentEl.createDiv({
 			cls: "graph-search-input-wrapper",
@@ -98,7 +94,6 @@ export class GraphQueryModal extends Modal {
 			onColonInsert: (raw, caret) => {
 				this.maybeScheduleFilter(raw, caret);
 			},
-			isDebug: () => this.plugin.isDebugMode(),
 		});
 
 		this.suggestController = new QuerySuggestController(
@@ -161,44 +156,13 @@ export class GraphQueryModal extends Modal {
 			window.clearTimeout(this.debounceHandle);
 		}
 		this.cancelPendingFilter();
-		this.isClosed = true;
-		this.plugin.clearIndexes();
+		this.queryEngine.dispose();
 		this.plugin.clearActiveModal();
 		this.contentEl.empty();
 	}
 
 	focusInput() {
 		this.inputController?.focus();
-	}
-
-	private startBuild() {
-		if (this.buildPromise) {
-			return;
-		}
-		this.buildPromise = (async () => {
-			try {
-				await this.plugin.buildGraphIndex();
-				if (this.isClosed) {
-					return;
-				}
-				this.graphReady = true;
-				await this.plugin.buildSearchIndex();
-				if (this.isClosed) {
-					return;
-				}
-				this.searchReady = true;
-			} catch (error) {
-				console.error("Graph index build failed", error);
-				new Notice("Graph index build failed; see console");
-			} finally {
-				if (this.isClosed) {
-					this.plugin.clearIndexes();
-				}
-			}
-		})();
-		this.buildPromise.finally(() => {
-			this.buildPromise = undefined;
-		});
 	}
 
 	private maybeScheduleFilter(raw: string, cursor: number) {
@@ -247,21 +211,7 @@ export class GraphQueryModal extends Modal {
 		}
 
 		try {
-			if (this.buildPromise) {
-				await this.buildPromise;
-			}
-			if (!this.graphReady) {
-				await this.plugin.buildGraphIndex();
-				this.graphReady = true;
-			}
-			if (!this.searchReady) {
-				await this.plugin.buildSearchIndex();
-				this.searchReady = true;
-			}
-			const response = (await wasm.graph_query_from_atoms(
-				this.atoms,
-				this.plugin.getScoreWeights(),
-			)) as GraphQueryResult;
+			const response = await this.queryEngine.query(this.atoms);
 			const scored = response.results as ScoredCandidate[];
 
 			this.results = scored;
@@ -275,8 +225,7 @@ export class GraphQueryModal extends Modal {
 				response.near_titles,
 			);
 		} catch (error) {
-			console.error("Graph query failed", error);
-			new Notice("Graph query failed; see console");
+			new Notice("Graph query failed.");
 		}
 	}
 

@@ -29,7 +29,7 @@ class FilterSuggestModal extends FuzzySuggestModal<FilterItem> {
 		this.onSelect = onSelect;
 		this.onCancel = onCancel;
 		this.items = buildFilterItems(app);
-		this.setPlaceholder("Filter: near, tag, path");
+		this.setPlaceholder("Filter by near, tag, path");
 	}
 
 	getItems(): FilterItem[] {
@@ -63,7 +63,7 @@ function buildFilterItems(app: App): FilterItem[] {
 	if (activeFile) {
 		items.push({
 			value: "near-current",
-			label: `near: Current Note (${activeFile.basename})`,
+			label: `near: current note (${activeFile.basename})`,
 		});
 	}
 	items.push({ value: "literal", label: ": (literal)" });

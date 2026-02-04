@@ -9,8 +9,6 @@ import {
 import { QueryInputModel } from "../query-input/query-input-model";
 import { buildEditableDomFromAtoms } from "../query-input/chip-dom";
 import {
-	extractRawFromEditable,
-	getCaretOffset,
 	getRangeOffsets,
 	restoreCaretOffset,
 } from "../query-input/editable-dom";
@@ -20,7 +18,6 @@ type InputControllerOptions = {
 	onChange: (atoms: QueryAtom[], rawQuery: string) => void;
 	onColonInsert?: (raw: string, caret: number) => void;
 	onInputApplied?: () => void;
-	isDebug: () => boolean;
 };
 
 export class QueryInputController {
@@ -32,14 +29,12 @@ export class QueryInputController {
 	private onChange: InputControllerOptions["onChange"];
 	private onColonInsert?: InputControllerOptions["onColonInsert"];
 	private onInputApplied?: InputControllerOptions["onInputApplied"];
-	private isDebug: InputControllerOptions["isDebug"];
 
 	constructor(options: InputControllerOptions) {
 		this.inputEl = options.inputEl;
 		this.onChange = options.onChange;
 		this.onColonInsert = options.onColonInsert;
 		this.onInputApplied = options.onInputApplied;
-		this.isDebug = options.isDebug;
 		this.bind();
 		this.syncFromModel();
 	}
@@ -75,7 +70,6 @@ export class QueryInputController {
 			if (!(event instanceof InputEvent)) {
 				return;
 			}
-			this.logCaretContext("beforeinput:start", event);
 			const selection = window.getSelection();
 			const range = selection?.rangeCount
 				? selection.getRangeAt(0)
@@ -157,7 +151,6 @@ export class QueryInputController {
 				);
 			}
 			this.syncFromModel();
-			this.logCaretContext("beforeinput:end", event);
 		});
 	}
 
@@ -167,7 +160,6 @@ export class QueryInputController {
 		const offset = caretOffset ?? this.displayLength(this.atoms);
 		restoreCaretOffset(this.inputEl, offset, { preferBeforeChip: true });
 		this.isRendering = false;
-		this.logCaretContext("render", undefined);
 	}
 
 	private syncFromModel() {
@@ -234,34 +226,5 @@ export class QueryInputController {
 		}
 		this.inputModel.applyBackspace();
 		return true;
-	}
-
-	private logCaretContext(reason: string, event?: InputEvent) {
-		if (!this.isDebug()) {
-			return;
-		}
-		const selection = window.getSelection();
-		const anchorNode = selection?.anchorNode ?? null;
-		const focusNode = selection?.focusNode ?? null;
-		const anchorOffset = selection?.anchorOffset ?? null;
-		const focusOffset = selection?.focusOffset ?? null;
-		const raw = extractRawFromEditable(this.inputEl);
-		const caret = getCaretOffset(this.inputEl);
-		const atomSummary = this.atoms.map((atom) => atom.kind).join(",");
-		const inputType = event?.inputType ?? "";
-		const data = event?.data ?? "";
-		console.log("[graph-search] caret", {
-			reason,
-			inputType,
-			data,
-			raw,
-			caret,
-			modelCaret: this.inputModel.caretOffset,
-			atoms: atomSummary,
-			anchorNode,
-			anchorOffset,
-			focusNode,
-			focusOffset,
-		});
 	}
 }
