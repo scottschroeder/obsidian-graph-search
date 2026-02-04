@@ -29,10 +29,17 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: "18.x"
+                  cache: yarn
 
             - name: Use Rust
               if: steps.tag_check.outputs.is_release == 'true'
               uses: dtolnay/rust-toolchain@stable
+
+            - name: Install wasm-pack
+              if: steps.tag_check.outputs.is_release == 'true'
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: wasm-pack
 
             - name: Verify versions
               if: steps.tag_check.outputs.is_release == 'true'
@@ -51,13 +58,22 @@ jobs:
                   yarn install
                   yarn run build
 
+            - name: Prepare release bundle
+              if: steps.tag_check.outputs.is_release == 'true'
+              run: |
+                  rm -rf release
+                  mkdir -p release/graph-search
+                  cp main.js manifest.json styles.css release/graph-search/
+                  (cd release && zip -r "graph-search-${GITHUB_REF_NAME}.zip" graph-search)
+
             - name: Create release
               if: steps.tag_check.outputs.is_release == 'true'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   tag="${GITHUB_REF#refs/tags/}"
-                  gh release create "$tag" \
-                    --title="$tag" \
-                    --draft \
-                    main.js manifest.json styles.css
+                    gh release create "$tag" \
+                      --title="$tag" \
+                      --draft \
+                      main.js manifest.json styles.css \
+                      "release/graph-search-${GITHUB_REF_NAME}.zip"
