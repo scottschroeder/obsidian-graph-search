@@ -36,6 +36,11 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 - Settings → Graph Search → Advanced scoring → Debug mode
 - When enabled, previews show distance/title/body/total score breakdowns and the status line.
 
+## Areas for Improvement
+
+- Right now the search functionality is fairly basic, and the search weights are just numbers that "felt right". I think a lot more could be done here to bring search up to par.
+
+
 # Development
 
 > [!NOTE]
