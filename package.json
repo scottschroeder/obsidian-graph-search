@@ -21,6 +21,7 @@
 	"main": "main.js",
 	"name": "graph-search",
 	"scripts": {
+		"ci": "yarn install --frozen-lockfile && yarn build",
 		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"dev": "yarn run wasm && node esbuild.config.mjs",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
