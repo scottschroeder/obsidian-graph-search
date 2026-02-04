@@ -39,6 +39,7 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 ## Areas for Improvement
 
 - Right now the search functionality is fairly basic, and the search weights are just numbers that "felt right". I think a lot more could be done here to bring search up to par.
+- The index/graph are built from scratch every time the search modal is opened. On my vault(s) this is imperceptibly fast and avoids any issues with old data. There is probably a design where we incrementally update the index/graphs as changes are made which would be more efficient, if more complex. Practically this only makes sense if we encounter a vault large enough that the indexing delay becomes noticable or inconvenient.
 
 
 # Development
