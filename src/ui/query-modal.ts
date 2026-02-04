@@ -2,46 +2,12 @@ import { App, Modal, Notice, TFile } from "obsidian";
 
 import * as wasm from "../../pkg/obsidian_rust_plugin";
 
-import type {
-	GraphQueryResult,
-	QueryAtom,
-	ScoredCandidate,
-	ScoreWeights,
-} from "./types";
-import {
-	buildRawFromAtoms,
-	displayLengthForAtom,
-	displayLengthForAtoms,
-	extractBodyTermsFromAtoms,
-	formatTagValue,
-	isColonInsert,
-	normalizeAtoms,
-	snapCaretBeforeChip,
-} from "./query-utils";
-import { QueryInputModel } from "./query-input/query-input-model";
-import { buildSnippet, buildSnippetNodes } from "./html-utils";
-import { buildEditableDomFromAtoms } from "./query-input/html-utils";
-import {
-	extractRawFromEditable,
-	getCaretOffset,
-	getRangeOffsets,
-	restoreCaretOffset,
-} from "./query-input/editable-dom";
-import { openFilterPicker } from "./filter-suggest";
-import { openPathPicker } from "./path-suggest";
-import { openTitlePicker } from "./title-suggest";
-import { openTagPicker } from "./tag-suggest";
-
-type GraphSearchPluginApi = {
-	buildGraphIndex(): Promise<void>;
-	buildSearchIndex(): Promise<void>;
-	clearIndexes(): void;
-	clearActiveModal(): void;
-	getSearchContent(path: string): string;
-	getDisplayTitle(path: string): string;
-	getScoreWeights(): ScoreWeights;
-	isDebugMode(): boolean;
-};
+import type { GraphQueryResult, QueryAtom, ScoredCandidate } from "./types";
+import { extractBodyTermsFromAtoms } from "./query-utils";
+import { QueryInputController } from "./query-modal/input-controller";
+import { GraphResultsRenderer } from "./query-modal/results-renderer";
+import { QuerySuggestController } from "./query-modal/suggest-controller";
+import type { GraphSearchPluginApi } from "./query-modal/plugin-api";
 
 export class GraphQueryModal extends Modal {
 	private static readonly DEBOUNCE_MS = 20;
@@ -51,7 +17,6 @@ export class GraphQueryModal extends Modal {
 	private inputEl?: HTMLDivElement;
 	private resultsEl?: HTMLDivElement;
 	private statusEl?: HTMLDivElement;
-	private isSuggesting = false;
 	private results: ScoredCandidate[] = [];
 	private selectedIndex = -1;
 	private debounceHandle?: number;
@@ -64,10 +29,11 @@ export class GraphQueryModal extends Modal {
 	private lastSearchTerms: string[] = [];
 	private atoms: QueryAtom[] = [];
 	private rawQuery = "";
-	private isRendering = false;
 	private pendingFilterHandle?: number;
 	private pendingFilterCaret?: number;
-	private inputModel = new QueryInputModel();
+	private inputController?: QueryInputController;
+	private suggestController?: QuerySuggestController;
+	private resultsRenderer?: GraphResultsRenderer;
 
 	constructor(app: App, plugin: GraphSearchPluginApi) {
 		super(app);
@@ -119,101 +85,75 @@ export class GraphQueryModal extends Modal {
 			}
 		});
 
-		this.inputEl.addEventListener("beforeinput", (event) => {
-			if (this.isRendering) {
-				return;
-			}
-			if (!(event instanceof InputEvent)) {
-				return;
-			}
-			this.logCaretContext("beforeinput:start", event);
-			const selection = window.getSelection();
-			const range = selection?.rangeCount
-				? selection.getRangeAt(0)
-				: null;
-			const offsets =
-				range && this.inputEl
-					? getRangeOffsets(this.inputEl, range)
-					: null;
-			if (!offsets) {
-				return;
-			}
-			const inputType = event.inputType ?? "";
-			const rangeStart = Math.min(offsets.start, offsets.end);
-			const rangeEnd = Math.max(offsets.start, offsets.end);
-			const snappedCaret = snapCaretBeforeChip(
-				this.inputModel.atoms,
-				rangeStart,
-			);
-			this.inputModel.setCaret(snappedCaret);
-			let handled = false;
-			if (inputType === "insertText") {
-				const data = event.data ?? "";
-				if (rangeEnd > rangeStart) {
-					this.inputModel.applyReplaceRange(
-						rangeStart,
-						rangeEnd,
-						data,
-					);
-				} else {
-					this.inputModel.applyInsertText(data);
-				}
-				handled = true;
-				if (data === ":") {
-					if (this.handleLiteralColonFromModel()) {
-						event.preventDefault();
-						this.syncFromModel();
-						return;
-					}
-				}
-			} else if (inputType === "insertFromPaste") {
-				const data =
-					event.dataTransfer?.getData("text/plain") ??
-					event.data ??
-					"";
-				if (rangeEnd > rangeStart) {
-					this.inputModel.applyReplaceRange(
-						rangeStart,
-						rangeEnd,
-						data,
-					);
-				} else {
-					this.inputModel.applyInsertText(data);
-				}
-				handled = true;
-			} else if (inputType === "deleteContentBackward") {
-				if (rangeEnd > rangeStart) {
-					this.inputModel.deleteRange(rangeStart, rangeEnd);
-				} else {
-					this.inputModel.applyBackspace();
-				}
-				handled = true;
-			} else if (inputType === "deleteContentForward") {
-				if (rangeEnd > rangeStart) {
-					this.inputModel.deleteRange(rangeStart, rangeEnd);
-				} else {
-					this.inputModel.applyDeleteForward();
-				}
-				handled = true;
-			}
-			if (!handled) {
-				return;
-			}
-			event.preventDefault();
-			this.cancelPendingFilter();
-			if (inputType === "insertText" && event.data === ":") {
-				this.maybeScheduleFilter(
-					event,
-					this.inputModel.displayString(),
-					this.inputModel.caretOffset,
-				);
-			}
-			this.syncFromModel();
-			this.logCaretContext("beforeinput:end", event);
+		this.inputController = new QueryInputController({
+			inputEl: this.inputEl,
+			onChange: (atoms, raw) => {
+				this.atoms = atoms;
+				this.rawQuery = raw;
+				this.scheduleQuery();
+			},
+			onInputApplied: () => {
+				this.cancelPendingFilter();
+			},
+			onColonInsert: (raw, caret) => {
+				this.maybeScheduleFilter(raw, caret);
+			},
+			isDebug: () => this.plugin.isDebugMode(),
 		});
 
-		this.syncFromModel();
-		this.inputEl.focus();
+		this.suggestController = new QuerySuggestController(
+			this.app,
+			this.plugin,
+			(kind, value, caret, display) => {
+				this.inputController?.insertChipAtCaret(
+					kind,
+					value,
+					caret,
+					display,
+				);
+			},
+		);
+
+		if (this.resultsEl && this.statusEl) {
+			this.resultsRenderer = new GraphResultsRenderer({
+				resultsEl: this.resultsEl as unknown as HTMLElement & {
+					empty(): void;
+					setText(text: string): void;
+					show(): void;
+					hide(): void;
+					createEl(
+						tag: string,
+						options?: { text?: string; cls?: string },
+					): HTMLElement;
+					createDiv(options?: {
+						cls?: string;
+						text?: string;
+					}): HTMLDivElement;
+				},
+				statusEl: this.statusEl as unknown as HTMLElement & {
+					empty(): void;
+					setText(text: string): void;
+					show(): void;
+					hide(): void;
+					createEl(
+						tag: string,
+						options?: { text?: string; cls?: string },
+					): HTMLElement;
+					createDiv(options?: {
+						cls?: string;
+						text?: string;
+					}): HTMLDivElement;
+				},
+				plugin: this.plugin,
+				maxResults: GraphQueryModal.MAX_RESULTS,
+				onSelectIndex: (index) => {
+					this.selectedIndex = index;
+					this.openSelectedResult();
+				},
+			});
+		}
+
+		this.inputController.focus();
 	}
 
 	onClose() {
@@ -228,7 +168,7 @@ export class GraphQueryModal extends Modal {
 	}
 
 	focusInput() {
-		this.inputEl?.focus();
+		this.inputController?.focus();
 	}
 
 	private startBuild() {
@@ -261,11 +201,8 @@ export class GraphQueryModal extends Modal {
 		});
 	}
 
-	private maybeScheduleFilter(event: Event, raw: string, cursor: number) {
-		if (this.isSuggesting) {
-			return;
-		}
-		if (!isColonInsert(event)) {
+	private maybeScheduleFilter(raw: string, cursor: number) {
+		if (this.suggestController?.suggesting) {
 			return;
 		}
 		const insertIndex = cursor - 1;
@@ -283,84 +220,13 @@ export class GraphQueryModal extends Modal {
 	}
 
 	private openFilterSuggest() {
-		if (this.pendingFilterCaret === undefined || this.isSuggesting) {
+		if (this.pendingFilterCaret === undefined) {
 			return;
 		}
 		const caret = this.pendingFilterCaret;
 		this.pendingFilterCaret = undefined;
 		this.pendingFilterHandle = undefined;
-		this.isSuggesting = true;
-		openFilterPicker(
-			this.app,
-			(selected) => {
-				this.isSuggesting = false;
-				if (selected === "literal") {
-					return;
-				}
-				if (selected === "near-current") {
-					const activeFile = this.app.workspace.getActiveFile();
-					if (activeFile) {
-						const display = this.plugin.getDisplayTitle(
-							activeFile.path,
-						);
-						this.insertChipAtCaret(
-							"near",
-							activeFile.path,
-							caret,
-							display,
-						);
-					}
-					return;
-				}
-				if (selected === "near") {
-					this.isSuggesting = true;
-					openTitlePicker(
-						this.app,
-						(path, display) => {
-							this.insertChipAtCaret(
-								"near",
-								path,
-								caret,
-								display,
-							);
-						},
-						() => {
-							this.isSuggesting = false;
-						},
-					);
-					return;
-				}
-				if (selected === "tag") {
-					this.isSuggesting = true;
-					openTagPicker(
-						this.app,
-						(value) => {
-							const formatted = formatTagValue(value);
-							this.insertChipAtCaret("tag", formatted, caret);
-						},
-						() => {
-							this.isSuggesting = false;
-						},
-					);
-					return;
-				}
-				if (selected === "path") {
-					this.isSuggesting = true;
-					openPathPicker(
-						this.app,
-						(value) => {
-							this.insertChipAtCaret("path", value, caret);
-						},
-						() => {
-							this.isSuggesting = false;
-						},
-					);
-				}
-			},
-			() => {
-				this.isSuggesting = false;
-			},
-		);
+		this.suggestController?.openFilterSuggest(caret);
 	}
 
 	private async runQuery() {
@@ -428,161 +294,13 @@ export class GraphQueryModal extends Modal {
 		candidateCount: number,
 		nearTitles: string[],
 	) {
-		if (!this.resultsEl || !this.statusEl) {
-			return;
-		}
-
-		this.resultsEl.empty();
-		const showDebug = this.plugin.isDebugMode();
-		if (showDebug) {
-			this.statusEl.setText(
-				`Candidates: ${candidateCount}, Near: ${nearTitles.length}, Results: ${results.length}`,
-			);
-			this.statusEl.show();
-		} else {
-			this.statusEl.setText("");
-			this.statusEl.hide();
-		}
-
-		if (results.length === 0) {
-			this.resultsEl.createEl("div", { text: "No results." });
-			return;
-		}
-
-		const list = this.resultsEl.createDiv();
-		const weights = showDebug ? this.plugin.getScoreWeights() : null;
-		results
-			.slice(0, GraphQueryModal.MAX_RESULTS)
-			.forEach((entry, index) => {
-				const item = list.createDiv({ cls: "suggestion-item" });
-				item.addClass("graph-search-result");
-				if (index === this.selectedIndex) {
-					item.addClass("is-selected");
-				}
-				const titleRow = item.createDiv({ cls: "graph-search-title" });
-				titleRow.setText(this.plugin.getDisplayTitle(entry.path));
-				const pathRow = item.createDiv({ cls: "graph-search-path" });
-				pathRow.setText(entry.path);
-
-				const body = this.plugin.getSearchContent(entry.path);
-				const snippet = buildSnippet(body, this.lastSearchTerms);
-				if (snippet) {
-					const snippetEl = item.createDiv({
-						cls: "graph-search-snippet",
-					});
-					snippetEl.appendChild(
-						buildSnippetNodes(snippet, this.lastSearchTerms),
-					);
-				}
-				if (showDebug && weights) {
-					const weightedDistance =
-						entry.distance_score * weights.distance_weight;
-					const weightedTitle =
-						entry.title_score * weights.title_weight;
-					const weightedBody = entry.body_score * weights.body_weight;
-					const debugRow = item.createDiv({
-						cls: "graph-search-snippet",
-					});
-					debugRow.setText(
-						`distance ${entry.distance_score.toFixed(2)} (${weightedDistance.toFixed(2)}), title ${entry.title_score.toFixed(2)} (${weightedTitle.toFixed(2)}), body ${entry.body_score.toFixed(2)} (${weightedBody.toFixed(2)}), total ${entry.total_score.toFixed(2)}`,
-					);
-				}
-
-				// Add match quality badge
-				const scoreBadge = item.createDiv({
-					cls: "graph-search-score-badge",
-				});
-				scoreBadge.setText(entry.total_score.toFixed(2));
-
-				item.addEventListener("click", () => {
-					this.selectedIndex = index;
-					this.openSelectedResult();
-				});
-			});
-		const selected = list.querySelector(".is-selected");
-		if (selected instanceof HTMLElement) {
-			selected.scrollIntoView({ block: "nearest" });
-		}
-	}
-
-	private renderEditable(caretOffset?: number) {
-		if (!this.inputEl) {
-			return;
-		}
-		this.isRendering = true;
-		this.inputEl.empty();
-		this.inputEl.appendChild(buildEditableDomFromAtoms(this.atoms));
-		const offset = caretOffset ?? this.displayLength(this.atoms);
-		restoreCaretOffset(this.inputEl, offset, { preferBeforeChip: true });
-		this.isRendering = false;
-		this.logCaretContext("render", undefined);
-	}
-
-	private syncFromModel() {
-		this.atoms = normalizeAtoms(this.inputModel.atoms);
-		this.rawQuery = buildRawFromAtoms(this.atoms);
-		this.renderEditable(this.inputModel.caretOffset);
-		this.scheduleQuery();
-		this.inputEl?.focus();
-	}
-
-	private insertChipAtCaret(
-		kind: QueryAtom["kind"],
-		value: string,
-		caretOffset: number,
-		display?: string,
-	) {
-		const cleanedValue = value.trim();
-		const removal = this.removeColonAtOffset(
-			this.inputModel.atoms,
-			caretOffset - 1,
+		this.resultsRenderer?.render(
+			results,
+			candidateCount,
+			nearTitles,
+			this.selectedIndex,
+			this.lastSearchTerms,
 		);
-		const adjustedOffset = removal.removed
-			? Math.max(0, caretOffset - 1)
-			: caretOffset;
-		this.inputModel = new QueryInputModel(removal.atoms, adjustedOffset);
-		this.inputModel.insertChip(kind, cleanedValue, display);
-		this.isSuggesting = false;
-		this.syncFromModel();
-	}
-
-	private removeColonAtOffset(
-		atoms: QueryAtom[],
-		offset: number,
-	): { atoms: QueryAtom[]; removed: boolean } {
-		if (offset < 0) {
-			return { atoms, removed: false };
-		}
-		const updated = [...atoms];
-		let cursor = 0;
-		for (let index = 0; index < updated.length; index += 1) {
-			const current = updated[index];
-			const length = displayLengthForAtom(current);
-			if (offset >= cursor && offset < cursor + length) {
-				if (current.kind !== "term") {
-					return { atoms: updated, removed: false };
-				}
-				const relative = offset - cursor;
-				if (current.value[relative] !== ":") {
-					return { atoms: updated, removed: false };
-				}
-				const nextValue =
-					current.value.slice(0, relative) +
-					current.value.slice(relative + 1);
-				if (nextValue.trim().length === 0) {
-					updated.splice(index, 1);
-				} else {
-					updated[index] = { kind: "term", value: nextValue };
-				}
-				return { atoms: updated, removed: true };
-			}
-			cursor += length;
-		}
-		return { atoms: updated, removed: false };
-	}
-
-	private displayLength(atoms: QueryAtom[]): number {
-		return displayLengthForAtoms(atoms);
 	}
 
 	private cancelPendingFilter() {
@@ -591,58 +309,6 @@ export class GraphQueryModal extends Modal {
 			this.pendingFilterHandle = undefined;
 		}
 		this.pendingFilterCaret = undefined;
-	}
-
-	private handleLiteralColonFromModel(): boolean {
-		const raw = this.inputModel.displayString();
-		const cursor = this.inputModel.caretOffset;
-		const insertIndex = cursor - 1;
-		const firstIndex = insertIndex - 1;
-		if (insertIndex < 0 || firstIndex < 0) {
-			return false;
-		}
-		if (raw[firstIndex] !== ":") {
-			return false;
-		}
-		const beforeFirst = firstIndex - 1;
-		if (beforeFirst >= 0 && !/\s/.test(raw[beforeFirst])) {
-			return false;
-		}
-		this.cancelPendingFilter();
-		this.inputModel.applyBackspace();
-		return true;
-	}
-
-	private logCaretContext(reason: string, event?: InputEvent) {
-		if (!this.plugin.isDebugMode()) {
-			return;
-		}
-		if (!this.inputEl) {
-			return;
-		}
-		const selection = window.getSelection();
-		const anchorNode = selection?.anchorNode ?? null;
-		const focusNode = selection?.focusNode ?? null;
-		const anchorOffset = selection?.anchorOffset ?? null;
-		const focusOffset = selection?.focusOffset ?? null;
-		const raw = extractRawFromEditable(this.inputEl);
-		const caret = getCaretOffset(this.inputEl);
-		const atomSummary = this.atoms.map((atom) => atom.kind).join(",");
-		const inputType = event?.inputType ?? "";
-		const data = event?.data ?? "";
-		console.log("[graph-search] caret", {
-			reason,
-			inputType,
-			data,
-			raw,
-			caret,
-			modelCaret: this.inputModel.caretOffset,
-			atoms: atomSummary,
-			anchorNode,
-			anchorOffset,
-			focusNode,
-			focusOffset,
-		});
 	}
 
 	private moveSelection(delta: number) {

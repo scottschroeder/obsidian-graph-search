@@ -15,8 +15,8 @@ import {
 	buildSnippet,
 	buildSnippetNodes,
 	escapeRegExp,
-} from "../src/ui/html-utils";
-import { buildEditableDomFromAtoms } from "../src/ui/query-input/html-utils";
+} from "../src/ui/snippet-utils";
+import { buildEditableDomFromAtoms } from "../src/ui/query-input/chip-dom";
 import {
 	extractAtomsFromEditable,
 	extractRawFromEditable,

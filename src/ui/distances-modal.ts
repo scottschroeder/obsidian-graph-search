@@ -1,4 +1,4 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, Setting } from "obsidian";
 
 import type { DistanceEntry } from "./types";
 
@@ -15,9 +15,9 @@ export class GraphDistancesModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.createEl("h2", {
-			text: `Distances from: ${this.title}`,
-		});
+		new Setting(contentEl)
+			.setName(`Distances from: ${this.title}`)
+			.setHeading();
 
 		const list = contentEl.createEl("ul");
 		this.entries.slice(0, 25).forEach((entry) => {
