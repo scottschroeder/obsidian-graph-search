@@ -1,4 +1,3 @@
-import escapeHtml from "escape-html";
 import { describe, expect, it } from "vitest";
 
 import type { QueryAtom } from "../src/ui/types";
@@ -14,10 +13,10 @@ import {
 } from "../src/ui/query-utils";
 import {
 	buildSnippet,
+	buildSnippetNodes,
 	escapeRegExp,
-	highlightSnippet,
 } from "../src/ui/html-utils";
-import { buildEditableHtmlFromAtoms } from "../src/ui/query-input/html-utils";
+import { buildEditableDomFromAtoms } from "../src/ui/query-input/html-utils";
 import {
 	extractAtomsFromEditable,
 	extractRawFromEditable,
@@ -37,9 +36,11 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "term", value: "budget" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
-		expect(html).toContain("graph-search-chip");
-		expect(html).toContain("My Note");
+		const div = document.createElement("div");
+		div.appendChild(buildEditableDomFromAtoms(atoms));
+		const chip = div.querySelector(".graph-search-chip");
+		expect(chip).not.toBeNull();
+		expect(chip?.textContent).toContain("My Note");
 	});
 
 	it("extracts atoms from editable chips", () => {
@@ -50,9 +51,8 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "term", value: "more" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
 		const div = document.createElement("div");
-		div.innerHTML = html;
+		div.appendChild(buildEditableDomFromAtoms(atoms));
 		expect(extractAtomsFromEditable(div)).toEqual(atoms);
 	});
 
@@ -62,10 +62,9 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "term", value: "and" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
 		const div = document.createElement("div");
 		div.setAttribute("contenteditable", "true");
-		div.innerHTML = html;
+		div.appendChild(buildEditableDomFromAtoms(atoms));
 		document.body.appendChild(div);
 		const insideChipOffset = 3;
 		restoreCaretOffset(div, insideChipOffset);
@@ -82,10 +81,9 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "term", value: "and" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
 		const div = document.createElement("div");
 		div.setAttribute("contenteditable", "true");
-		div.innerHTML = html;
+		div.appendChild(buildEditableDomFromAtoms(atoms));
 		document.body.appendChild(div);
 		const insideChipOffset = 4;
 		restoreCaretOffset(div, insideChipOffset, { preferBeforeChip: true });
@@ -100,10 +98,9 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "near", value: "Two" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
 		const div = document.createElement("div");
 		div.setAttribute("contenteditable", "true");
-		div.innerHTML = html;
+		div.appendChild(buildEditableDomFromAtoms(atoms));
 		document.body.appendChild(div);
 		const selection = window.getSelection();
 		const range = document.createRange();
@@ -127,9 +124,8 @@ describe("query utils", () => {
 			{ kind: "whitespace", value: " " },
 			{ kind: "term", value: "notes" },
 		];
-		const html = buildEditableHtmlFromAtoms(atoms);
 		const div = document.createElement("div");
-		div.innerHTML = html;
+		div.appendChild(buildEditableDomFromAtoms(atoms));
 		expect(extractRawFromEditable(div)).toBe("#meeting notes");
 	});
 
@@ -186,50 +182,58 @@ describe("buildSnippet", () => {
 		const body = "prefix ".repeat(20) + "TARGET " + "suffix ".repeat(20);
 		const snippet = buildSnippet(body, ["target"]);
 		expect(snippet).toContain("TARGET");
-		expect(snippet).toContain("graph-search-highlight");
 	});
 
 	it("handles match at start of body", () => {
 		const snippet = buildSnippet("target is at the start", ["target"]);
 		expect(snippet).toContain("target");
-		expect(snippet).toContain("graph-search-highlight");
 	});
 
 	it("handles match at end of body", () => {
 		const body = "prefix ".repeat(30) + "target";
 		const snippet = buildSnippet(body, ["target"]);
 		expect(snippet).toContain("target");
-		expect(snippet).toContain("graph-search-highlight");
 	});
 });
 
-describe("highlightSnippet", () => {
+describe("buildSnippetNodes", () => {
 	it("wraps matching terms in highlight span", () => {
-		const result = highlightSnippet("hello world", ["world"]);
-		expect(result).toBe(
-			'hello <span class="graph-search-highlight">world</span>',
-		);
+		const fragment = buildSnippetNodes("hello world", ["world"]);
+		const div = document.createElement("div");
+		div.appendChild(fragment);
+		const highlights = div.querySelectorAll(".graph-search-highlight");
+		expect(highlights.length).toBe(1);
+		expect(highlights[0].textContent).toBe("world");
+		expect(div.textContent).toBe("hello world");
 	});
 
 	it("handles multiple term matches", () => {
-		const result = highlightSnippet("hello world hello", ["hello"]);
-		expect(result).toBe(
-			'<span class="graph-search-highlight">hello</span> world <span class="graph-search-highlight">hello</span>',
-		);
+		const fragment = buildSnippetNodes("hello world hello", ["hello"]);
+		const div = document.createElement("div");
+		div.appendChild(fragment);
+		const highlights = div.querySelectorAll(".graph-search-highlight");
+		expect(highlights.length).toBe(2);
+		expect(highlights[0].textContent).toBe("hello");
+		expect(highlights[1].textContent).toBe("hello");
+		expect(div.textContent).toBe("hello world hello");
 	});
 
 	it("is case insensitive", () => {
-		const result = highlightSnippet("Hello World", ["hello"]);
-		expect(result).toBe(
-			'<span class="graph-search-highlight">Hello</span> World',
-		);
+		const fragment = buildSnippetNodes("Hello World", ["hello"]);
+		const div = document.createElement("div");
+		div.appendChild(fragment);
+		const highlight = div.querySelector(".graph-search-highlight");
+		expect(highlight?.textContent).toBe("Hello");
+		expect(div.textContent).toBe("Hello World");
 	});
 
 	it("strips # prefix from tag terms", () => {
-		const result = highlightSnippet("meeting notes", ["#meeting"]);
-		expect(result).toBe(
-			'<span class="graph-search-highlight">meeting</span> notes',
-		);
+		const fragment = buildSnippetNodes("meeting notes", ["#meeting"]);
+		const div = document.createElement("div");
+		div.appendChild(fragment);
+		const highlight = div.querySelector(".graph-search-highlight");
+		expect(highlight?.textContent).toBe("meeting");
+		expect(div.textContent).toBe("meeting notes");
 	});
 });
 
@@ -246,39 +250,6 @@ describe("findTokenAtCursor", () => {
 	it("handles cursor at word boundary", () => {
 		const result = findTokenAtCursor("hello world", 5);
 		expect(result).toEqual({ start: 0, end: 5, token: "hello" });
-	});
-});
-
-describe("escapeHtml", () => {
-	it("escapes < > & \" '", () => {
-		expect(escapeHtml('<div class="test">&\'>')).toBe(
-			"&lt;div class=&quot;test&quot;&gt;&amp;&#39;&gt;",
-		);
-	});
-
-	it("handles empty string", () => {
-		expect(escapeHtml("")).toBe("");
-	});
-
-	it("handles string with no special chars", () => {
-		expect(escapeHtml("hello world")).toBe("hello world");
-	});
-
-	it("escapes HTML special characters", () => {
-		expect(escapeHtml("<script>")).toBe("&lt;script&gt;");
-		expect(escapeHtml('attr="val"')).toBe("attr=&quot;val&quot;");
-		expect(escapeHtml("a & b")).toBe("a &amp; b");
-		expect(escapeHtml("it's")).toBe("it&#39;s");
-	});
-
-	it("handles combined attack vectors", () => {
-		expect(escapeHtml('<img onerror="alert(1)">')).toBe(
-			"&lt;img onerror=&quot;alert(1)&quot;&gt;",
-		);
-	});
-
-	it("preserves safe characters", () => {
-		expect(escapeHtml("Hello World 123!@#$%")).toBe("Hello World 123!@#$%");
 	});
 });
 

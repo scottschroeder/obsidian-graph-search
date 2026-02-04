@@ -1,5 +1,3 @@
-import escapeHtml from "escape-html";
-
 export function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -34,20 +32,63 @@ export function buildSnippet(body: string, terms: string[]): string {
 	let start = 0;
 	start = Math.max(0, matchIndex - Math.floor(windowSize / 2));
 	const snippet = cleaned.slice(start, start + windowSize);
-	return highlightSnippet(snippet, terms);
+	return snippet;
 }
 
-export function highlightSnippet(snippet: string, terms: string[]): string {
-	let result = escapeHtml(snippet);
-	for (const term of terms) {
-		const normalized = term.replace(/^#/, "");
-		if (!normalized) {
+export function buildSnippetNodes(
+	snippet: string,
+	terms: string[],
+): DocumentFragment {
+	const fragment = document.createDocumentFragment();
+	if (!snippet) {
+		return fragment;
+	}
+	const normalizedTerms = normalizeHighlightTerms(terms);
+	if (normalizedTerms.length === 0) {
+		fragment.appendChild(document.createTextNode(snippet));
+		return fragment;
+	}
+	const pattern = buildHighlightPattern(normalizedTerms);
+	if (!pattern) {
+		fragment.appendChild(document.createTextNode(snippet));
+		return fragment;
+	}
+	const regex = new RegExp(pattern, "gi");
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
+	while ((match = regex.exec(snippet)) !== null) {
+		if (!match[0]) {
+			regex.lastIndex += 1;
 			continue;
 		}
-		const pattern = new RegExp(escapeRegExp(normalized), "gi");
-		result = result.replace(pattern, (match) => {
-			return `<span class="graph-search-highlight">${match}</span>`;
-		});
+		const start = match.index;
+		const end = match.index + match[0].length;
+		if (start > lastIndex) {
+			fragment.appendChild(
+				document.createTextNode(snippet.slice(lastIndex, start)),
+			);
+		}
+		const highlight = document.createElement("span");
+		highlight.className = "graph-search-highlight";
+		highlight.textContent = snippet.slice(start, end);
+		fragment.appendChild(highlight);
+		lastIndex = end;
 	}
-	return result;
+	if (lastIndex < snippet.length) {
+		fragment.appendChild(document.createTextNode(snippet.slice(lastIndex)));
+	}
+	return fragment;
+}
+
+function normalizeHighlightTerms(terms: string[]): string[] {
+	const normalized = terms
+		.map((term) => term.replace(/^#/, "").trim())
+		.filter((term) => term.length > 0);
+	return Array.from(new Set(normalized));
+}
+
+function buildHighlightPattern(terms: string[]): string {
+	const sorted = [...terms].sort((a, b) => b.length - a.length);
+	const escaped = sorted.map((term) => escapeRegExp(term)).filter(Boolean);
+	return escaped.join("|");
 }
