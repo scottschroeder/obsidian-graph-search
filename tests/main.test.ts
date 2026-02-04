@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { collectFrontmatterTags, splitTagString } from "../src/ui/tag-utils";
+import { collectFrontmatterTags, splitTagString } from "../ui/tag-utils";
 
 describe("splitTagString", () => {
 	it("splits on comma", () => {

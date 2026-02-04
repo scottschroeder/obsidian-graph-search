@@ -3,20 +3,20 @@ import { Plugin } from "obsidian";
 import * as plugin from "./pkg/obsidian_rust_plugin";
 import wasmBinary from "./pkg/obsidian_rust_plugin_bg.wasm";
 
-import { GraphQueryModal } from "./src/ui/query-modal";
-import type { SearchDocumentInput } from "./src/ui/types";
+import { GraphQueryModal } from "./ui/query-modal";
+import type { SearchDocumentInput } from "./ui/types";
 import {
 	buildDanglingGraphInput,
 	GraphEdgeInput,
 	GraphNodeInput,
-} from "./src/ui/link-utils";
-import { buildDisplayTitleMap } from "./src/ui/metadata/display-titles";
-import { collectFileTags } from "./src/ui/metadata/tags";
+} from "./ui/link-utils";
+import { buildDisplayTitleMap } from "./ui/metadata/display-titles";
+import { collectFileTags } from "./ui/metadata/tags";
 import {
 	DEFAULT_SETTINGS,
 	GraphSearchPluginSettings,
 	GraphSearchSettingTab,
-} from "./src/ui/settings";
+} from "./ui/settings";
 
 export default class GraphSearchPlugin extends Plugin {
 	settings: GraphSearchPluginSettings;

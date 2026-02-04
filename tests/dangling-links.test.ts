@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDanglingGraphInput } from "../src/ui/link-utils";
+import { buildDanglingGraphInput } from "../ui/link-utils";
 
 describe("dangling links", () => {
 	it("creates nodes and edges for unresolved links", () => {

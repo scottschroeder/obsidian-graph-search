@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { QueryAtom } from "../src/ui/types";
-import { QueryInputModel } from "../src/ui/query-input/query-input-model";
+import type { QueryAtom } from "../ui/types";
+import { QueryInputModel } from "../ui/query-input/query-input-model";
 
 function formatAtoms(atoms: QueryAtom[]): string {
 	return atoms

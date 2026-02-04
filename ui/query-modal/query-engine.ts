@@ -1,4 +1,4 @@
-import * as wasm from "../../../pkg/obsidian_rust_plugin";
+import * as wasm from "../../pkg/obsidian_rust_plugin";
 
 import type { GraphQueryResult, QueryAtom } from "../types";
 import type { GraphSearchPluginApi } from "./plugin-api";

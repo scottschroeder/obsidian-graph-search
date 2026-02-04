@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { QueryAtom } from "../src/ui/types";
+import type { QueryAtom } from "../ui/types";
 
 import {
 	buildRawFromAtoms,
@@ -10,19 +10,19 @@ import {
 	offsetForAtom,
 	snapCaretBeforeChip,
 	stripMdExtension,
-} from "../src/ui/query-utils";
+} from "../ui/query-utils";
 import {
 	buildSnippet,
 	buildSnippetNodes,
 	escapeRegExp,
-} from "../src/ui/snippet-utils";
-import { buildEditableDomFromAtoms } from "../src/ui/query-input/chip-dom";
+} from "../ui/snippet-utils";
+import { buildEditableDomFromAtoms } from "../ui/query-input/chip-dom";
 import {
 	extractAtomsFromEditable,
 	extractRawFromEditable,
 	getCaretOffset,
 	restoreCaretOffset,
-} from "../src/ui/query-input/editable-dom";
+} from "../ui/query-input/editable-dom";
 
 describe("query utils", () => {
 	it("strips .md extension", () => {

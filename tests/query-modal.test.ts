@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { QueryAtom } from "../src/ui/types";
+import type { QueryAtom } from "../ui/types";
 
-import { normalizeAtoms } from "../src/ui/query-utils";
+import { normalizeAtoms } from "../ui/query-utils";
 
 describe("normalizeAtoms", () => {
 	it("merges consecutive term atoms", () => {
