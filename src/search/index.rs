@@ -308,8 +308,9 @@ fn normalize_tag(raw: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashSet;
+
+    use super::*;
 
     fn build_store() -> SearchStore {
         let mut store = SearchStore::new();

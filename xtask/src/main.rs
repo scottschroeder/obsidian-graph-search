@@ -1,10 +1,12 @@
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::env;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use toml_edit::{value, DocumentMut};
 use walkdir::WalkDir;
 

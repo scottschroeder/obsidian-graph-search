@@ -40,8 +40,8 @@ jobs:
               run: |
                   if ! git diff --quiet; then
                     echo "Formatting changed files:"
-                    git diff --name-only
                     git diff
+                    git diff --name-only
                     exit 1
                   fi
 

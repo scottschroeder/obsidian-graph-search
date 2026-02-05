@@ -9,7 +9,6 @@ use petgraph::{
 use serde::{Deserialize, Serialize};
 
 use super::model::{EdgeInput, EdgeKind, NodeData, NodeInput};
-
 use crate::models::CandidateInput;
 
 #[derive(Debug, Serialize)]

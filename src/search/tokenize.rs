@@ -203,8 +203,8 @@ fn add_composite_suffixes_from_ranges(
     if segment_ranges.len() < 2 {
         return;
     }
-    for idx in 1..segment_ranges.len() - 1 {
-        let start = segment_ranges[idx].0;
+    for item in segment_ranges.iter().take(segment_ranges.len() - 1).skip(1) {
+        let start = item.0;
         let suffix = &token[start..];
         if suffix.len() < 2 {
             continue;

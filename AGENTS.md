@@ -3,12 +3,13 @@
   <xtask>
   # Xtask
 
-  when running `xtask`, you must invoke it as
-  ```
-  cargo run --package xtask -- <subcommand>
-  ```
-  </xtask>
+when running `xtask`, you must invoke it as
 
+```
+cargo run --package xtask -- <subcommand>
+```
+
+  </xtask>
 
   <ci>
     # CI
