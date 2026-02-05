@@ -55,18 +55,19 @@ jobs:
                   echo "Timed out waiting for CI run for $sha"
                   exit 1
 
-            - name: Download build artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  name: plugin-build
-                  run-id: ${{ steps.ci.outputs.run_id }}
-                  path: ./artifact
+            - uses: ./.github/actions/setup
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build plugin
+              run: npm run build
 
             - name: Prepare release bundle
               run: |
                   rm -rf release
                   mkdir -p release/graph-search
-                  cp artifact/main.js artifact/manifest.json artifact/styles.css release/graph-search/
+                  cp main.js manifest.json styles.css release/graph-search/
                   (cd release && zip -r "graph-search-${{ steps.tag.outputs.tag }}.zip" graph-search)
 
             - name: Create release
@@ -77,5 +78,5 @@ jobs:
                   gh release create "$tag" \
                     --title="$tag" \
                     --draft \
-                    artifact/main.js artifact/manifest.json artifact/styles.css \
+                    main.js manifest.json styles.css \
                     "release/graph-search-${{ steps.tag.outputs.tag }}.zip"
