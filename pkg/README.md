@@ -57,7 +57,7 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 - Rust + cargo (via `rustup`)
 - `wasm-pack`
 - `wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
-- Node.js + yarn
+- Node.js + npm
 
 ### Common commands
 

@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 CARGO ?= cargo
-YARN ?= yarn
+NPM ?= npm
 
 VAULT_DIR ?=
 PLUGIN_ID ?= graph-search
@@ -26,14 +26,14 @@ preflight:
 	@command -v rustc >/dev/null 2>&1 || { echo "rustc not found"; exit 1; }
 	@command -v wasm-pack >/dev/null 2>&1 || { echo "wasm-pack not found"; exit 1; }
 	@command -v node >/dev/null 2>&1 || { echo "node not found"; exit 1; }
-	@command -v $(YARN) >/dev/null 2>&1 || { echo "yarn not found"; exit 1; }
+	@command -v $(NPM) >/dev/null 2>&1 || { echo "npm not found"; exit 1; }
 
 deps:
-	$(YARN) install
+	$(NPM) install
 
 build: preflight deps
 	$(MAKE) wasm
-	$(YARN) run build
+	$(NPM) run build
 
 wasm: $(WASM_OUT)
 
@@ -52,7 +52,7 @@ rust-lint:
 	$(CARGO) clippy
 
 js-lint:
-	$(YARN) run lint
+	$(NPM) run lint
 
 fmt: rust-fmt js-fmt
 
@@ -66,7 +66,7 @@ rust-fmt:
 	$(CARGO) +nightly fmt
 
 js-fmt:
-	$(YARN) run fmt
+	$(NPM) run fmt
 
 test: build rust-test js-test 
 
@@ -74,7 +74,7 @@ rust-test:
 	$(CARGO) test
 
 js-test:
-	$(YARN) run test
+	$(NPM) run test
 
 clean:
 	$(CARGO) clean

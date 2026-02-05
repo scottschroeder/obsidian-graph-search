@@ -3,7 +3,7 @@
 	"description": "Graph-aware Obsidian search with proximity scoring.",
 	"devDependencies": {
 		"@codemirror/state": "^6.0.0",
-		"@codemirror/view": "^6.39.12",
+		"@codemirror/view": "6.38.6",
 		"@types/node": "^25.2.0",
 		"@typescript-eslint/eslint-plugin": "8.54.0",
 		"@typescript-eslint/parser": "8.54.0",
@@ -23,7 +23,7 @@
 	"scripts": {
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"build:ci": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"ci": "yarn install --frozen-lockfile && yarn lint && yarn test && yarn build",
+		"ci": "npm ci && npm run lint && npm test && npm run build",
 		"dev": "node esbuild.config.mjs",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
 		"lint": "tsc -noEmit -skipLibCheck",
