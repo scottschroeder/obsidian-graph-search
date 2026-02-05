@@ -71,12 +71,17 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
     ```bash
     cargo run --package xtask -- version bump X.Y.Z
     ```
-2. Validate versions:
+2. Re-run build to generate updated assets
     ```bash
-    make version-check
+    make build
     ```
-3. Tag the release with `X.Y.Z` (no `v` prefix) and push the tag.
-4. The GitHub Actions workflow will build and create a draft release when the tag matches `X.Y.Z` and `manifest.json`.
+3. Commit & push updated assets
+4. Tag the release with `X.Y.Z` (no `v` prefix) and push the tag.
+    ```bash
+    git tag -s 0.4.2 -m '' 
+    git push origin --tags
+    ```
+5. The GitHub Actions workflow will build and create a draft release when the tag matches `X.Y.Z` and `manifest.json`.
 
 Notes:
 
