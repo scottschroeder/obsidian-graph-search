@@ -72,10 +72,13 @@ export default class GraphSearchPlugin extends Plugin {
 	}
 
 	async loadSettings() {
+		const stored: unknown = await this.loadData();
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.loadData(),
+			stored && typeof stored === "object"
+				? (stored as Partial<GraphSearchPluginSettings>)
+				: {},
 		);
 	}
 

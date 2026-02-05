@@ -72,12 +72,6 @@ export default [
 	},
 	...obsidianRecommended,
 	{
-		rules: {
-			"no-unused-vars": "off",
-			"no-prototype-builtins": "off",
-		},
-	},
-	{
 		files: ["eslint.config.mjs", "esbuild.config.mjs"],
 		plugins: {
 			import: importPlugin,
@@ -85,7 +79,16 @@ export default [
 		rules: {
 			"import/no-nodejs-modules": [
 				"error",
-				{ allow: ["node:path", "node:url", "path", "fs", "process"] },
+				{
+					allow: [
+						"node:module",
+						"node:path",
+						"node:url",
+						"path",
+						"fs",
+						"process",
+					],
+				},
 			],
 		},
 	},
@@ -123,12 +126,6 @@ export default [
 		},
 	},
 	{
-		files: ["package.json"],
-		rules: {
-			"depend/ban-dependencies": "off",
-		},
-	},
-	{
 		files: ["**/*.ts", "**/*.tsx"],
 		languageOptions: {
 			parser: tseslint.parser,
@@ -140,14 +137,6 @@ export default [
 		plugins: {
 			"@typescript-eslint": tseslint.plugin,
 		},
-		rules: {
-			"@typescript-eslint/no-unused-vars": ["warn", { args: "none" }],
-			"@typescript-eslint/ban-ts-comment": "off",
-			"@typescript-eslint/no-empty-function": "off",
-			"@typescript-eslint/no-unsafe-assignment": "off",
-			"@typescript-eslint/no-unsafe-member-access": "off",
-			"@typescript-eslint/no-unsafe-argument": "off",
-			"@typescript-eslint/no-unsafe-call": "off",
-		},
+		rules: {},
 	},
 ];

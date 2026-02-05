@@ -5,7 +5,7 @@ import { collectFrontmatterTags, splitTagString } from "../tag-utils";
 export function collectFileTags(app: App, file: TFile): string[] {
 	const cache = app.metadataCache.getFileCache(file);
 	const inlineTags = cache?.tags?.map((tag) => tag.tag) ?? [];
-	const frontmatter = cache?.frontmatter?.tags;
+	const frontmatter: unknown = cache?.frontmatter?.tags;
 	const frontmatterTags = collectFrontmatterTags(frontmatter);
 	const combined = [...inlineTags, ...frontmatterTags]
 		.flatMap((tag) => splitTagString(tag))
