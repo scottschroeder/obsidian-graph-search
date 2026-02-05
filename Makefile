@@ -19,7 +19,7 @@ WASM_DEPS := $(RUST_SRC) Cargo.toml Cargo.lock xtask/Cargo.toml xtask/src/main.r
 
 .PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test version-check wasm
 
-all: build
+all: build fmt test lint
 
 preflight:
 	@command -v $(CARGO) >/dev/null 2>&1 || { echo "cargo not found"; exit 1; }

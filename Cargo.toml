@@ -1,6 +1,6 @@
 [package]
 name = "obsidian-rust-plugin"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Stephen Solka <solka@angel.co>"]
 description = "Graph-aware Obsidian search with proximity scoring."
 repository = "https://github.com/scottschroeder/obsidian-graph-search"

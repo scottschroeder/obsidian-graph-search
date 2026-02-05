@@ -21,13 +21,13 @@
 	"main": "main.js",
 	"name": "graph-search",
 	"scripts": {
-		"ci": "yarn install --frozen-lockfile && yarn lint && yarn test && yarn build",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"build:ci": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"ci": "yarn install --frozen-lockfile && yarn lint && yarn test && yarn build",
 		"dev": "node esbuild.config.mjs",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
 		"lint": "tsc -noEmit -skipLibCheck",
 		"test": "vitest run"
 	},
-	"version": "0.4.1"
+	"version": "0.4.2"
 }
