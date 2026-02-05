@@ -33,5 +33,5 @@
 		"lint": "tsc -noEmit -skipLibCheck && eslint . --ext .ts,.js,.mjs",
 		"test": "vitest run"
 	},
-	"version": "0.4.7"
+	"version": "0.4.9"
 }
