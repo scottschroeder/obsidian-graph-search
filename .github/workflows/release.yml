@@ -1,17 +1,16 @@
 name: Release Obsidian plugin
 
 on:
-    workflow_run:
-        workflows: ["CI"]
-        types:
-            - completed
+    push:
+        tags:
+            - "*"
 
 jobs:
     release:
-        if: github.event.workflow_run.conclusion == 'success'
         runs-on: ubuntu-latest
         permissions:
             contents: write
+            actions: read
         steps:
             - uses: actions/checkout@v4
               with:
@@ -20,25 +19,50 @@ jobs:
             - name: Resolve tag
               id: tag
               run: |
-                  tag=$(git tag --points-at "${{ github.event.workflow_run.head_sha }}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
-                  if [ -z "$tag" ]; then
-                    echo "No semver tag found for this run; skipping release."
-                    echo "is_release=false" >> "$GITHUB_OUTPUT"
+                  tag="${GITHUB_REF#refs/tags/}"
+                  if [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo "tag=$tag" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "Tag '$tag' does not match X.Y.Z; skipping release."
                     exit 0
                   fi
-                  echo "tag=$tag" >> "$GITHUB_OUTPUT"
-                  echo "is_release=true" >> "$GITHUB_OUTPUT"
+
+            - name: Find CI run for tag
+              id: ci
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  sha=$(git rev-list -n 1 "${{ steps.tag.outputs.tag }}")
+                  echo "Looking for CI run for $sha"
+                  for i in $(seq 1 40); do
+                    run_json=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?per_page=50" \
+                      --jq "[.workflow_runs[] | select(.head_sha == \"$sha\")][0]")
+                    run_id=$(echo "$run_json" | jq -r '.id // empty')
+                    if [ -n "$run_id" ]; then
+                      status=$(echo "$run_json" | jq -r '.status')
+                      conclusion=$(echo "$run_json" | jq -r '.conclusion')
+                      if [ "$status" = "completed" ]; then
+                        if [ "$conclusion" = "success" ]; then
+                          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+                          exit 0
+                        fi
+                        echo "CI run $run_id completed with $conclusion"
+                        exit 1
+                      fi
+                    fi
+                    sleep 15
+                  done
+                  echo "Timed out waiting for CI run for $sha"
+                  exit 1
 
             - name: Download build artifacts
-              if: steps.tag.outputs.is_release == 'true'
               uses: actions/download-artifact@v4
               with:
                   name: plugin-build
-                  run-id: ${{ github.event.workflow_run.id }}
+                  run-id: ${{ steps.ci.outputs.run_id }}
                   path: ./artifact
 
             - name: Prepare release bundle
-              if: steps.tag.outputs.is_release == 'true'
               run: |
                   rm -rf release
                   mkdir -p release/graph-search
@@ -46,7 +70,6 @@ jobs:
                   (cd release && zip -r "graph-search-${{ steps.tag.outputs.tag }}.zip" graph-search)
 
             - name: Create release
-              if: steps.tag.outputs.is_release == 'true'
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
