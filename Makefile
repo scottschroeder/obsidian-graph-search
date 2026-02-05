@@ -13,8 +13,9 @@ WASM_OUT := pkg/obsidian_rust_plugin_bg.wasm \
 	pkg/obsidian_rust_plugin.d.ts \
 	pkg/package.json \
 	pkg/README.md \
-	pkg/LICENSE
-WASM_DEPS := $(RUST_SRC) Cargo.toml Cargo.lock xtask/src/main.rs
+	pkg/LICENSE \
+	pkg/src_hash.txt
+WASM_DEPS := $(RUST_SRC) Cargo.toml Cargo.lock xtask/Cargo.toml xtask/src/main.rs
 
 .PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test version-check wasm
 
@@ -30,7 +31,7 @@ preflight:
 deps:
 	$(YARN) install
 
-build: preflight
+build: preflight deps
 	$(MAKE) wasm
 	$(YARN) run build
 
@@ -67,7 +68,7 @@ rust-fmt:
 js-fmt:
 	$(YARN) run fmt
 
-test: preflight deps rust-test js-test build
+test: build rust-test js-test 
 
 rust-test:
 	$(CARGO) test

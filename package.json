@@ -27,8 +27,7 @@
 		"dev": "node esbuild.config.mjs",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
 		"lint": "tsc -noEmit -skipLibCheck",
-		"test": "vitest run",
-		"wasm": "cargo xtask wasm build"
+		"test": "vitest run"
 	},
 	"version": "0.4.1"
 }

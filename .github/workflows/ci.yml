@@ -1,34 +1,74 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+    pull_request:
+    push:
+        branches:
+            - main
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    wasm-check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Verify committed WASM hash
+              run: cargo run --package xtask -- wasm check
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: yarn
+    wasm-build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Install wasm-pack
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: wasm-pack
+            - name: Build WASM artifacts
+              run: cargo run --package xtask -- wasm build
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+    fmt:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+            - name: Run formatters
+              run: yarn run fmt
+            - name: Verify formatting
+              run: |
+                  if ! git diff --quiet; then
+                    echo "Formatting changed files:"
+                    git diff --name-only
+                    git diff
+                    exit 1
+                  fi
 
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-pack
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+            - name: Run Rust lints
+              run: cargo clippy
+            - name: Run JS lints
+              run: yarn run lint
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+            - name: Run Rust tests
+              run: cargo test
+            - name: Run JS tests
+              run: yarn test
 
-      - name: Run tests
-        run: make test YARN="yarn --frozen-lockfile"
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: ./.github/actions/setup
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+            - name: Build plugin
+              run: yarn build
