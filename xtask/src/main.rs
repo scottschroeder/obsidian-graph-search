@@ -2,12 +2,24 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::env;
 use std::fs;
+use std::path::Path;
+use std::process::Command;
 use toml_edit::{value, DocumentMut};
 
 const MANIFEST_PATH: &str = "manifest.json";
 const CARGO_TOML_PATH: &str = "Cargo.toml";
 const PACKAGE_JSON_PATH: &str = "package.json";
 const VERSIONS_JSON_PATH: &str = "versions.json";
+const PKG_DIR: &str = "pkg";
+const WASM_OUT_NAME: &str = "obsidian_rust_plugin";
+const WASM_FILES: [&str; 6] = [
+    "obsidian_rust_plugin_bg.wasm",
+    "obsidian_rust_plugin.js",
+    "obsidian_rust_plugin.d.ts",
+    "package.json",
+    "README.md",
+    "LICENSE",
+];
 
 fn main() -> Result<()> {
     let mut args = env::args().skip(1);
@@ -27,10 +39,103 @@ fn main() -> Result<()> {
             }
             version_bump(&version)
         }
+        (Some("wasm"), Some("build")) => {
+            if args.next().is_some() {
+                bail!("Unexpected arguments. Usage: cargo xtask wasm build");
+            }
+            wasm_build()
+        }
+        (Some("wasm"), Some("check")) => {
+            if args.next().is_some() {
+                bail!("Unexpected arguments. Usage: cargo xtask wasm check");
+            }
+            wasm_check()
+        }
         _ => {
-            bail!("Usage:\n  cargo xtask version check\n  cargo xtask version bump X.Y.Z");
+            bail!(
+                "Usage:\n  cargo xtask version check\n  cargo xtask version bump X.Y.Z\n  cargo xtask wasm build\n  cargo xtask wasm check"
+            );
         }
     }
+}
+
+fn wasm_build() -> Result<()> {
+    run_wasm_pack(PKG_DIR)?;
+    remove_optional_wasm_dts(PKG_DIR);
+    Ok(())
+}
+
+fn wasm_check() -> Result<()> {
+    let check_dir = Path::new("target/wasm-check");
+    if check_dir.exists() {
+        fs::remove_dir_all(check_dir).with_context(|| "Remove target/wasm-check")?;
+    }
+    fs::create_dir_all(check_dir).with_context(|| "Create target/wasm-check")?;
+    run_wasm_pack(
+        check_dir
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid check dir"))?,
+    )?;
+    remove_optional_wasm_dts(check_dir);
+
+    let pkg_dir = Path::new(PKG_DIR);
+    let mut mismatches = Vec::new();
+    for file in WASM_FILES {
+        let expected_path = check_dir.join(file);
+        let actual_path = pkg_dir.join(file);
+        if !expected_path.exists() {
+            mismatches.push(format!("missing in build: {}", file));
+            continue;
+        }
+        if !actual_path.exists() {
+            mismatches.push(format!("missing in pkg: {}", file));
+            continue;
+        }
+        let expected = fs::read(&expected_path)
+            .with_context(|| format!("Read {}", expected_path.display()))?;
+        let actual =
+            fs::read(&actual_path).with_context(|| format!("Read {}", actual_path.display()))?;
+        if expected != actual {
+            mismatches.push(format!("different: {}", file));
+        }
+    }
+
+    fs::remove_dir_all(check_dir).with_context(|| "Cleanup target/wasm-check")?;
+
+    if !mismatches.is_empty() {
+        let details = mismatches.join(", ");
+        bail!(
+            "WASM artifacts out of date. Run `cargo xtask wasm build` and commit pkg/*. Details: {}",
+            details
+        );
+    }
+
+    Ok(())
+}
+
+fn run_wasm_pack(out_dir: &str) -> Result<()> {
+    let status = Command::new("wasm-pack")
+        .args([
+            "build",
+            "--target",
+            "web",
+            "--out-dir",
+            out_dir,
+            "--out-name",
+            WASM_OUT_NAME,
+            "--release",
+        ])
+        .status()
+        .with_context(|| "Run wasm-pack")?;
+    if !status.success() {
+        bail!("wasm-pack failed with status {}", status);
+    }
+    Ok(())
+}
+
+fn remove_optional_wasm_dts<P: AsRef<Path>>(dir: P) {
+    let path = dir.as_ref().join("obsidian_rust_plugin_bg.wasm.d.ts");
+    let _ = fs::remove_file(path);
 }
 
 fn version_check() -> Result<()> {

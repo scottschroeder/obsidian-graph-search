@@ -21,13 +21,14 @@
 	"main": "main.js",
 	"name": "graph-search",
 	"scripts": {
-		"ci": "yarn install --frozen-lockfile && yarn build",
-		"build": "yarn run wasm && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"dev": "yarn run wasm && node esbuild.config.mjs",
+		"ci": "yarn install --frozen-lockfile && yarn build:ci",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build:ci": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "node esbuild.config.mjs",
 		"fmt": "prettier --write \"**/*.{ts,js,mjs,json,css,md}\"",
 		"lint": "tsc -noEmit -skipLibCheck",
-		"test": "yarn run wasm && vitest run",
-		"wasm": "wasm-pack build --target web && node -e \"require('fs').rmSync('pkg/obsidian_rust_plugin_bg.wasm.d.ts', { force: true })\""
+		"test": "vitest run",
+		"wasm": "cargo xtask wasm build"
 	},
 	"version": "0.4.1"
 }

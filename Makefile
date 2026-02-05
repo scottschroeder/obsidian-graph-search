@@ -3,13 +3,20 @@ SHELL := /bin/bash
 CARGO ?= cargo
 YARN ?= yarn
 
-VAULT_DIR ?= $(HOME)/Documents/personal
+VAULT_DIR ?=
 PLUGIN_ID ?= graph-search
 PLUGIN_DIR := $(VAULT_DIR)/.obsidian/plugins/$(PLUGIN_ID)
 
 RUST_SRC := $(shell find src -name \*.rs -print)
+WASM_OUT := pkg/obsidian_rust_plugin_bg.wasm \
+	pkg/obsidian_rust_plugin.js \
+	pkg/obsidian_rust_plugin.d.ts \
+	pkg/package.json \
+	pkg/README.md \
+	pkg/LICENSE
+WASM_DEPS := $(RUST_SRC) Cargo.toml Cargo.lock xtask/src/main.rs
 
-.PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test version-check
+.PHONY: all preflight deps build dev fix install clean lint fmt test rust-lint rust-fmt rust-fix rust-test js-lint js-fmt js-test version-check wasm
 
 all: build
 
@@ -24,9 +31,16 @@ deps:
 	$(YARN) install
 
 build: preflight
+	$(MAKE) wasm
 	$(YARN) run build
 
+wasm: $(WASM_OUT)
+
+$(WASM_OUT): $(WASM_DEPS)
+	$(CARGO) run --package xtask -- wasm build
+
 install: build
+	@if [ -z "$(VAULT_DIR)" ]; then echo "VAULT_DIR is not set"; exit 1; fi
 	mkdir -p $(PLUGIN_DIR)
 	cp main.js manifest.json styles.css $(PLUGIN_DIR)/
 	cp -R pkg $(PLUGIN_DIR)/
