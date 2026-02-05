@@ -26,10 +26,10 @@ export class GraphQueryEngine {
 
 	async query(atoms: QueryAtom[]): Promise<GraphQueryResult> {
 		await this.ensureReady();
-		return (await wasm.graph_query_from_atoms(
+		return wasm.graph_query_from_atoms(
 			atoms,
 			this.plugin.getScoreWeights(),
-		)) as GraphQueryResult;
+		);
 	}
 
 	dispose() {

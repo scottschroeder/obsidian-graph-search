@@ -190,7 +190,7 @@ export class GraphQueryModal extends Modal {
 
 		try {
 			const response = await this.queryEngine.query(this.atoms);
-			const scored = response.results as ScoredCandidate[];
+			const scored = response.results;
 
 			this.results = scored;
 			this.selectedIndex = scored.length > 0 ? 0 : -1;
@@ -203,6 +203,7 @@ export class GraphQueryModal extends Modal {
 				response.near_titles,
 			);
 		} catch (error) {
+			void error;
 			new Notice("Graph query failed.");
 		}
 	}
@@ -212,7 +213,7 @@ export class GraphQueryModal extends Modal {
 			window.clearTimeout(this.debounceHandle);
 		}
 		this.debounceHandle = window.setTimeout(() => {
-			this.runQuery();
+			void this.runQuery();
 		}, GraphQueryModal.DEBOUNCE_MS);
 	}
 
@@ -277,7 +278,7 @@ export class GraphQueryModal extends Modal {
 function openFileByPath(app: App, path: string) {
 	const file = app.vault.getAbstractFileByPath(path);
 	if (file instanceof TFile) {
-		app.workspace.getLeaf().openFile(file);
+		void app.workspace.getLeaf().openFile(file);
 	} else {
 		new Notice(`File not found: ${path}`);
 	}

@@ -50,7 +50,8 @@ export default class GraphSearchPlugin extends Plugin {
 		this.searchContentByPath.clear();
 		try {
 			plugin.cleanup_all();
-		} catch (e) {
+		} catch (error) {
+			void error;
 			// WASM cleanup failed, not critical
 		}
 	}
@@ -60,7 +61,8 @@ export default class GraphSearchPlugin extends Plugin {
 		this.displayTitleByPath.clear();
 		try {
 			plugin.cleanup_all();
-		} catch (e) {
+		} catch (error) {
+			void error;
 			// WASM cleanup failed, not critical
 		}
 	}

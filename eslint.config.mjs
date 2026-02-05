@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import importPlugin from "eslint-plugin-import";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import tseslint from "typescript-eslint";
 
@@ -77,6 +78,18 @@ export default [
 		},
 	},
 	{
+		files: ["eslint.config.mjs", "esbuild.config.mjs"],
+		plugins: {
+			import: importPlugin,
+		},
+		rules: {
+			"import/no-nodejs-modules": [
+				"error",
+				{ allow: ["node:path", "node:url", "path", "fs", "process"] },
+			],
+		},
+	},
+	{
 		files: ["ui/**/*.ts", "ui/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"],
 		languageOptions: {
 			globals: {
@@ -90,9 +103,7 @@ export default [
 		plugins: {
 			"@typescript-eslint": tseslint.plugin,
 		},
-		rules: {
-			"@typescript-eslint/no-deprecated": "off",
-		},
+		rules: {},
 	},
 	{
 		files: ["tests/**/*.ts", "tests/**/*.tsx"],
@@ -101,8 +112,14 @@ export default [
 				process: "readonly",
 			},
 		},
+		plugins: {
+			import: importPlugin,
+		},
 		rules: {
-			"import/no-nodejs-modules": "off",
+			"import/no-nodejs-modules": [
+				"error",
+				{ allow: ["node:fs", "node:path"] },
+			],
 		},
 	},
 	{
@@ -127,13 +144,10 @@ export default [
 			"@typescript-eslint/no-unused-vars": ["warn", { args: "none" }],
 			"@typescript-eslint/ban-ts-comment": "off",
 			"@typescript-eslint/no-empty-function": "off",
-			"@typescript-eslint/no-explicit-any": "off",
 			"@typescript-eslint/no-unsafe-assignment": "off",
 			"@typescript-eslint/no-unsafe-member-access": "off",
 			"@typescript-eslint/no-unsafe-argument": "off",
 			"@typescript-eslint/no-unsafe-call": "off",
-			"@typescript-eslint/no-unnecessary-type-assertion": "off",
-			"@typescript-eslint/no-floating-promises": "off",
 		},
 	},
 ];
