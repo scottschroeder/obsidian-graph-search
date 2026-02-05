@@ -3,6 +3,7 @@ name: wasm-artifacts
 on:
     push:
         paths:
+            - ".github/workflows/wasm-artifacts.yml"
             - "**/*.rs"
             - "Cargo.toml"
             - "Cargo.lock"
@@ -10,6 +11,7 @@ on:
             - "xtask/**"
     pull_request:
         paths:
+            - ".github/workflows/wasm-artifacts.yml"
             - "**/*.rs"
             - "Cargo.toml"
             - "Cargo.lock"
