@@ -1,19 +1,22 @@
-export function cleanup_all(): unknown;
+/* tslint:disable */
+/* eslint-disable */
 
-export function graph_init(nodes: unknown, edges: unknown): unknown;
+export function cleanup_all(): any;
 
-export function graph_query_from_atoms(atoms: unknown, weights: unknown): unknown;
+export function graph_init(nodes: any, edges: any): any;
 
-export function search_index(docs: unknown): unknown;
+export function graph_query_from_atoms(atoms: any, weights: any): any;
+
+export function search_index(docs: any): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly cleanup_all: () => [number, number, number];
-    readonly graph_init: (a: unknown, b: unknown) => [number, number, number];
-    readonly graph_query_from_atoms: (a: unknown, b: unknown) => [number, number, number];
-    readonly search_index: (a: unknown) => [number, number, number];
+    readonly graph_init: (a: any, b: any) => [number, number, number];
+    readonly graph_query_from_atoms: (a: any, b: any) => [number, number, number];
+    readonly search_index: (a: any) => [number, number, number];
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

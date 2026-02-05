@@ -13,6 +13,7 @@ use walkdir::WalkDir;
 const MANIFEST_PATH: &str = "manifest.json";
 const CARGO_TOML_PATH: &str = "Cargo.toml";
 const PACKAGE_JSON_PATH: &str = "package.json";
+const PACKAGE_LOCK_PATH: &str = "package-lock.json";
 const VERSIONS_JSON_PATH: &str = "versions.json";
 const PKG_DIR: &str = "pkg";
 const WASM_OUT_NAME: &str = "obsidian_rust_plugin";
@@ -238,6 +239,18 @@ fn version_bump(version: &str) -> Result<()> {
     set_json_string(&mut package, "version", version)?;
     write_json(PACKAGE_JSON_PATH, &package)?;
 
+    let mut package_lock = read_json(PACKAGE_LOCK_PATH)?;
+    set_json_string(&mut package_lock, "version", version)?;
+    if let Some(packages) = package_lock
+        .get_mut("packages")
+        .and_then(|value| value.as_object_mut())
+    {
+        if let Some(root) = packages.get_mut("").and_then(|value| value.as_object_mut()) {
+            root.insert("version".to_string(), Value::String(version.to_string()));
+        }
+    }
+    write_json(PACKAGE_LOCK_PATH, &package_lock)?;
+
     let mut versions = read_json(VERSIONS_JSON_PATH)?;
     let versions_obj = versions
         .as_object_mut()
@@ -246,6 +259,8 @@ fn version_bump(version: &str) -> Result<()> {
     write_json(VERSIONS_JSON_PATH, &versions)?;
 
     write_cargo_version(CARGO_TOML_PATH, version)?;
+
+    wasm_build()?;
 
     Ok(())
 }
