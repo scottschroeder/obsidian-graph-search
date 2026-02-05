@@ -21,7 +21,7 @@
 	"main": "main.js",
 	"name": "graph-search",
 	"scripts": {
-		"ci": "yarn install --frozen-lockfile && yarn build:ci",
+		"ci": "yarn install --frozen-lockfile && yarn lint && yarn test && yarn build",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"build:ci": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"dev": "node esbuild.config.mjs",
