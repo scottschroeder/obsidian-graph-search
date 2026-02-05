@@ -15,12 +15,46 @@ export class GraphQueryEngine {
 	}
 
 	startBuild(): Promise<void> | undefined {
+		return this.scheduleBuild((start) => {
+			start();
+		});
+	}
+
+	isReady(): boolean {
+		return this.graphReady && this.searchReady;
+	}
+
+	scheduleBuild(
+		defer: (start: () => void) => void,
+	): Promise<void> | undefined {
 		if (this.buildPromise) {
 			return this.buildPromise;
 		}
-		this.buildPromise = this.buildIndexes().finally(() => {
-			this.buildPromise = undefined;
+		let resolveBuild: (() => void) | undefined;
+		let rejectBuild: ((error: unknown) => void) | undefined;
+		this.buildPromise = new Promise<void>((resolve, reject) => {
+			resolveBuild = resolve;
+			rejectBuild = reject;
 		});
+		let started = false;
+		const start = () => {
+			if (started) {
+				return;
+			}
+			started = true;
+			if (this.closed) {
+				resolveBuild?.();
+				this.buildPromise = undefined;
+				return;
+			}
+			this.buildIndexes()
+				.then(() => resolveBuild?.())
+				.catch((error) => rejectBuild?.(error))
+				.finally(() => {
+					this.buildPromise = undefined;
+				});
+		};
+		defer(start);
 		return this.buildPromise;
 	}
 

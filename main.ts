@@ -101,7 +101,7 @@ export default class GraphSearchPlugin extends Plugin {
 		return this.settings.debugMode;
 	}
 
-	async buildGraphIndex(): Promise<void> {
+	buildGraphIndex(): Promise<void> {
 		const files = this.app.vault.getMarkdownFiles();
 		this.displayTitleByPath = buildDisplayTitleMap(files);
 		const nodes: GraphNodeInput[] = files.map((file) => ({
@@ -124,6 +124,7 @@ export default class GraphSearchPlugin extends Plugin {
 		edges.push(...dangling.edges);
 
 		plugin.graph_init(nodes, edges);
+		return Promise.resolve();
 	}
 
 	async buildSearchIndex(): Promise<void> {

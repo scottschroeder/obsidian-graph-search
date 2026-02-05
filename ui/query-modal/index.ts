@@ -27,6 +27,8 @@ export class GraphQueryModal extends Modal {
 	private rawQuery = "";
 	private pendingFilterHandle?: number;
 	private pendingFilterCaret?: number;
+	private buildIdleHandle?: number;
+	private buildIdleKind?: "idle" | "timeout";
 	private inputController?: QueryInputController;
 	private suggestController?: QuerySuggestController;
 	private resultsRenderer?: GraphResultsRenderer;
@@ -41,9 +43,7 @@ export class GraphQueryModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.addClass("prompt");
-		this.queryEngine.startBuild()?.catch(() => {
-			new Notice("Graph index build failed.");
-		});
+		this.scheduleBackgroundBuild();
 
 		const inputWrapper = contentEl.createDiv({
 			cls: "graph-search-input-wrapper",
@@ -133,6 +133,21 @@ export class GraphQueryModal extends Modal {
 		if (this.debounceHandle) {
 			window.clearTimeout(this.debounceHandle);
 		}
+		if (this.buildIdleHandle !== undefined) {
+			const windowWithIdle = window as Window & {
+				cancelIdleCallback?: (id: number) => void;
+			};
+			if (
+				this.buildIdleKind === "idle" &&
+				typeof windowWithIdle.cancelIdleCallback === "function"
+			) {
+				windowWithIdle.cancelIdleCallback(this.buildIdleHandle);
+			} else {
+				window.clearTimeout(this.buildIdleHandle);
+			}
+			this.buildIdleHandle = undefined;
+			this.buildIdleKind = undefined;
+		}
 		this.cancelPendingFilter();
 		this.queryEngine.dispose();
 		this.plugin.clearActiveModal();
@@ -189,7 +204,11 @@ export class GraphQueryModal extends Modal {
 		}
 
 		try {
+			if (!this.queryEngine.isReady()) {
+				this.showIndexingStatus();
+			}
 			const response = await this.queryEngine.query(this.atoms);
+			this.hideIndexingStatus();
 			const scored = response.results;
 
 			this.results = scored;
@@ -204,6 +223,7 @@ export class GraphQueryModal extends Modal {
 			);
 		} catch (error) {
 			void error;
+			this.hideIndexingStatus();
 			new Notice("Graph query failed.");
 		}
 	}
@@ -222,6 +242,7 @@ export class GraphQueryModal extends Modal {
 		candidateCount: number,
 		nearTitles: string[],
 	) {
+		this.resultsEl?.show();
 		this.resultsRenderer?.render(
 			results,
 			candidateCount,
@@ -229,6 +250,59 @@ export class GraphQueryModal extends Modal {
 			this.selectedIndex,
 			this.lastSearchTerms,
 		);
+	}
+
+	private scheduleBackgroundBuild() {
+		if (this.buildIdleHandle !== undefined) {
+			return;
+		}
+		const buildPromise = this.queryEngine.scheduleBuild((start) => {
+			const windowWithIdle = window as Window & {
+				requestIdleCallback?: (
+					callback: () => void,
+					options?: { timeout: number },
+				) => number;
+			};
+			const startBuild = () => {
+				this.buildIdleHandle = undefined;
+				this.buildIdleKind = undefined;
+				start();
+			};
+			if (typeof windowWithIdle.requestIdleCallback === "function") {
+				this.buildIdleKind = "idle";
+				this.buildIdleHandle = windowWithIdle.requestIdleCallback(
+					startBuild,
+					{
+						timeout: 1000,
+					},
+				);
+			} else {
+				this.buildIdleKind = "timeout";
+				this.buildIdleHandle = window.setTimeout(startBuild, 0);
+			}
+		});
+		buildPromise?.catch(() => {
+			new Notice("Graph index build failed.");
+		});
+	}
+
+	private showIndexingStatus() {
+		if (!this.resultsEl || !this.statusEl) {
+			return;
+		}
+		this.statusEl.setText("Indexing search graph...");
+		this.statusEl.show();
+		this.resultsEl.empty();
+		this.resultsEl.hide();
+	}
+
+	private hideIndexingStatus() {
+		if (!this.resultsEl || !this.statusEl) {
+			return;
+		}
+		this.statusEl.setText("");
+		this.statusEl.hide();
+		this.resultsEl.show();
 	}
 
 	private cancelPendingFilter() {

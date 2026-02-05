@@ -68,7 +68,7 @@ const obsidianRecommended = flattenConfigs(obsidianmd.configs.recommended);
 
 export default [
 	{
-		ignores: ["npm", "node_modules", "build", "pkg", "main.js"],
+		ignores: ["npm", "node_modules", "build", "pkg/**", "main.js"],
 	},
 	...obsidianRecommended,
 	{
