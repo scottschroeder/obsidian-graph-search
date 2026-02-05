@@ -78,7 +78,7 @@ The farther a note is in the graph, the lower its score. Also, notes with a lot 
 3. Commit & push updated assets
 4. Tag the release with `X.Y.Z` (no `v` prefix) and push the tag.
     ```bash
-    git tag -s 0.4.2 -m '' 
+    git tag -s 0.4.2 -m ''
     git push origin --tags
     ```
 5. The GitHub Actions workflow will build and create a draft release when the tag matches `X.Y.Z` and `manifest.json`.
