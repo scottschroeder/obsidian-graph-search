@@ -28,4 +28,4 @@ jobs:
             - name: Install wasm-pack
               run: cargo install wasm-pack --locked --version 0.12.1
             - name: Check committed WASM artifacts
-              run: cargo xtask wasm check
+              run: cargo run --package xtask -- wasm check
