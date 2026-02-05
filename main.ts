@@ -120,7 +120,7 @@ export default class GraphSearchPlugin extends Plugin {
 		nodes.push(...dangling.nodes);
 		edges.push(...dangling.edges);
 
-		await plugin.graph_init(nodes, edges);
+		plugin.graph_init(nodes, edges);
 	}
 
 	async buildSearchIndex(): Promise<void> {
@@ -138,7 +138,7 @@ export default class GraphSearchPlugin extends Plugin {
 			});
 			this.searchContentByPath.set(file.path, body);
 		}
-		await plugin.search_index(docs);
+		plugin.search_index(docs);
 	}
 
 	getSearchContent(path: string): string {

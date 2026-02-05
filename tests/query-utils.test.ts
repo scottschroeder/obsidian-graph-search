@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { QueryAtom } from "../ui/types";
 
 import {
-	buildRawFromAtoms,
 	displayLengthForAtom,
 	displayLengthForAtoms,
 	findTokenAtCursor,

@@ -6,7 +6,7 @@ export function isChipElement(node: Node): node is HTMLElement {
 }
 
 export function getChipValueElement(chip: HTMLElement): HTMLElement | null {
-	return chip.querySelector(`.${CHIP_VALUE_CLASS}`) as HTMLElement | null;
+	return chip.querySelector<HTMLElement>(`.${CHIP_VALUE_CLASS}`);
 }
 
 export function getChipParts(chip: HTMLElement): {

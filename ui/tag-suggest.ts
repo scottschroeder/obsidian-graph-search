@@ -59,7 +59,7 @@ function buildTagItems(app: App): TagItem[] {
 			getTags?: () => Record<string, number>;
 		}
 	).getTags?.();
-	const entries = Object.entries(tags ?? {}) as [string, number][];
+	const entries = Object.entries(tags ?? {});
 	entries.sort((a, b) => {
 		const countDiff = b[1] - a[1];
 		if (countDiff !== 0) {
