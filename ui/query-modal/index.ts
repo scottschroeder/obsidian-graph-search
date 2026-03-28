@@ -1,4 +1,4 @@
-import { App, Modal, Notice, TFile } from "obsidian";
+import { App, Modal, Notice, Platform, TFile } from "obsidian";
 
 import type { ObsidianHTMLElement, QueryAtom, ScoredCandidate } from "../types";
 import { extractBodyTermsFromAtoms } from "../query-utils";
@@ -63,26 +63,10 @@ export class GraphQueryModal extends Modal {
 				cls: "graph-search-results prompt-results",
 			}),
 		);
+		this.renderInstructions(toObsidianEl(contentEl.createDiv()));
 
 		this.inputEl.addEventListener("keydown", (event) => {
-			if (event.key === "Enter") {
-				event.preventDefault();
-				this.openSelectedResult();
-				return;
-			}
-			if (event.key === "ArrowDown") {
-				event.preventDefault();
-				this.moveSelection(1);
-				return;
-			}
-			if (event.key === "ArrowUp") {
-				event.preventDefault();
-				this.moveSelection(-1);
-				return;
-			}
-			if (event.key === "Escape") {
-				this.close();
-			}
+			this.handleKeydown(event);
 		});
 
 		this.inputController = new QueryInputController({
@@ -313,6 +297,31 @@ export class GraphQueryModal extends Modal {
 		this.pendingFilterCaret = undefined;
 	}
 
+	private handleKeydown(event: KeyboardEvent) {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			if (event.ctrlKey || event.metaKey) {
+				this.insertSelectedResultAsNear();
+				return;
+			}
+			this.openSelectedResult();
+			return;
+		}
+		if (event.key === "ArrowDown") {
+			event.preventDefault();
+			this.moveSelection(1);
+			return;
+		}
+		if (event.key === "ArrowUp") {
+			event.preventDefault();
+			this.moveSelection(-1);
+			return;
+		}
+		if (event.key === "Escape") {
+			this.close();
+		}
+	}
+
 	private moveSelection(delta: number) {
 		if (this.results.length === 0) {
 			return;
@@ -347,6 +356,49 @@ export class GraphQueryModal extends Modal {
 		openFileByPath(this.app, entry.path);
 		this.close();
 	}
+
+	private insertSelectedResultAsNear() {
+		if (
+			this.selectedIndex < 0 ||
+			this.selectedIndex >= this.results.length
+		) {
+			return;
+		}
+		const entry = this.results[this.selectedIndex];
+		this.inputController?.insertChipAfterLastChip(
+			"near",
+			entry.path,
+			this.plugin.getDisplayTitle(entry.path),
+		);
+	}
+
+	private renderInstructions(container: ObsidianHTMLElement) {
+		container.classList.add(
+			"graph-search-instructions",
+			"prompt-instructions",
+		);
+		const primaryModifier = isMacPlatform() ? "cmd" : "ctrl";
+		const instructions = [
+			{ command: "↑↓", note: "to navigate" },
+			{ command: "↵", note: "to open" },
+			{ command: `${primaryModifier}+↵`, note: "to add as near" },
+			{ command: "esc", note: "to dismiss" },
+		];
+
+		instructions.forEach(({ command, note }) => {
+			const instruction = container.createDiv({
+				cls: "graph-search-instruction prompt-instruction",
+			});
+			instruction.createEl("span", {
+				cls: "graph-search-instruction-command prompt-instruction-command",
+				text: command,
+			});
+			instruction.createEl("span", {
+				cls: "graph-search-instruction-note",
+				text: note,
+			});
+		});
+	}
 }
 
 function openFileByPath(app: App, path: string) {
@@ -360,4 +412,8 @@ function openFileByPath(app: App, path: string) {
 
 function toObsidianEl(element: HTMLElement): ObsidianHTMLElement {
 	return element as ObsidianHTMLElement;
+}
+
+function isMacPlatform(): boolean {
+	return Platform.isMacOS;
 }

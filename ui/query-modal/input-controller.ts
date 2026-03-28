@@ -43,6 +43,19 @@ export class QueryInputController {
 		this.inputEl.focus();
 	}
 
+	insertChipAfterLastChip(
+		kind: QueryAtom["kind"],
+		value: string,
+		display?: string,
+	) {
+		const cleanedValue = value.trim();
+		if (!cleanedValue) {
+			return;
+		}
+		this.inputModel.insertChipAfterLastChip(kind, cleanedValue, display);
+		this.syncFromModel();
+	}
+
 	insertChipAtCaret(
 		kind: QueryAtom["kind"],
 		value: string,

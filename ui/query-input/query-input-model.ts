@@ -174,6 +174,38 @@ export class QueryInputModel {
 		this.caretOffset = Math.min(caret, this.displayLength());
 	}
 
+	insertChipAfterLastChip(
+		kind: QueryAtom["kind"],
+		value: string,
+		display?: string,
+	) {
+		const insertIndex = findLastChipIndex(this.atoms) + 1;
+		const updated = [...this.atoms];
+		const prev = updated[insertIndex - 1];
+		const next = updated[insertIndex];
+		const atomsToInsert: QueryAtom[] = [];
+		if (prev && prev.kind !== "whitespace") {
+			atomsToInsert.push({ kind: "whitespace", value: " " });
+		}
+		atomsToInsert.push({ kind, value, display });
+		if (!next || next.kind !== "whitespace") {
+			atomsToInsert.push({ kind: "whitespace", value: " " });
+		}
+		const insertionOffset = offsetForAtom(updated, insertIndex);
+		const addedLength = atomsToInsert.reduce(
+			(total, atom) => total + displayLengthForAtom(atom),
+			0,
+		);
+		updated.splice(insertIndex, 0, ...atomsToInsert);
+		this.atoms = normalizeAtoms(updated);
+		if (this.caretOffset >= insertionOffset) {
+			this.caretOffset = Math.min(
+				this.caretOffset + addedLength,
+				this.displayLength(),
+			);
+		}
+	}
+
 	displayString(): string {
 		return this.atoms
 			.map((atom) => {
@@ -291,4 +323,14 @@ function insertAtomAtOffset(
 			displayLengthForAtom(atom),
 		index: updated.length - 1,
 	};
+}
+
+function findLastChipIndex(atoms: QueryAtom[]): number {
+	for (let index = atoms.length - 1; index >= 0; index -= 1) {
+		const atom = atoms[index];
+		if (atom.kind !== "term" && atom.kind !== "whitespace") {
+			return index;
+		}
+	}
+	return -1;
 }
