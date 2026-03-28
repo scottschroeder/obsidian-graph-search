@@ -117,6 +117,7 @@ export class App {
 		cachedRead: async () => "",
 	};
 	metadataCache = {
+		getFileCache: () => null,
 		resolvedLinks: {},
 		unresolvedLinks: {},
 	};

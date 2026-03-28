@@ -1,6 +1,7 @@
 import { App, FuzzySuggestModal } from "obsidian";
 
 import { buildDanglingGraphInput, stripMdExtension } from "./link-utils";
+import { collectFileAliases } from "./metadata/aliases";
 
 type NoteTitleItem = {
 	title: string;
@@ -58,7 +59,7 @@ class NoteTitleSuggestModal extends FuzzySuggestModal<NoteTitleItem> {
 	}
 }
 
-function buildNoteTitleItems(app: App): NoteTitleItem[] {
+export function buildNoteTitleItems(app: App): NoteTitleItem[] {
 	const files = app.vault.getMarkdownFiles();
 	const counts = new Map<string, number>();
 
@@ -66,22 +67,48 @@ function buildNoteTitleItems(app: App): NoteTitleItem[] {
 		counts.set(file.basename, (counts.get(file.basename) ?? 0) + 1);
 	});
 
-	const items = files.map((file) => {
+	const items = files.flatMap((file) => {
 		const hasDuplicate = (counts.get(file.basename) ?? 0) > 1;
 		const value = file.path;
 		const display = hasDuplicate
 			? stripMdExtension(file.path)
 			: file.basename;
-		const label = hasDuplicate
+		const titleLabel = hasDuplicate
 			? `${file.basename} - ${stripMdExtension(file.path)}`
 			: file.basename;
-		return {
-			title: file.basename,
-			path: file.path,
-			value,
-			display,
-			label,
-		};
+		const itemsForFile: NoteTitleItem[] = [
+			{
+				title: file.basename,
+				path: file.path,
+				value,
+				display,
+				label: titleLabel,
+			},
+		];
+		const seenLabels = new Set(
+			[
+				titleLabel,
+				file.basename,
+				display,
+				file.path,
+				stripMdExtension(file.path),
+			].map((value) => value.toLocaleLowerCase()),
+		);
+		for (const alias of collectFileAliases(app, file)) {
+			const aliasKey = alias.toLocaleLowerCase();
+			if (seenLabels.has(aliasKey)) {
+				continue;
+			}
+			seenLabels.add(aliasKey);
+			itemsForFile.push({
+				title: file.basename,
+				path: file.path,
+				value,
+				display: alias,
+				label: `${alias} -> ${display}`,
+			});
+		}
+		return itemsForFile;
 	});
 
 	const dangling = buildDanglingGraphInput({
