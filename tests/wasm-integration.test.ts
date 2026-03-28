@@ -16,7 +16,7 @@ beforeAll(() => {
 });
 
 describe("wasm integration", () => {
-	it("queries and ranks from atoms", () => {
+	it("omits near notes from the result set", () => {
 		const stats = wasm.search_index([
 			{
 				title: "Budget Meeting",
@@ -54,13 +54,12 @@ describe("wasm integration", () => {
 				distance_curve: "exponential",
 			},
 		);
-		expect(result.candidate_count).toBe(1);
+		expect(result.candidate_count).toBe(0);
 		expect(result.near_titles).toEqual(["meetings/budget.md"]);
-		expect(result.results.length).toBe(1);
-		expect(result.results[0].path).toBe("meetings/budget.md");
+		expect(result.results).toEqual([]);
 	});
 
-	it("uses graph proximity when near atoms are provided", () => {
+	it("uses graph proximity for non-root notes when near atoms are provided", () => {
 		wasm.search_index([
 			{
 				title: "alpha",
@@ -97,7 +96,8 @@ describe("wasm integration", () => {
 				],
 			),
 		);
-		expect(distances.get("alpha.md")).toBeCloseTo(0, 5);
+		expect(result.candidate_count).toBe(1);
+		expect(distances.has("alpha.md")).toBe(false);
 		expect(distances.get("beta.md")).toBeCloseTo(1, 5);
 	});
 });

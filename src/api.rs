@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashSet};
 
 use serde::Serialize;
 use serde_wasm_bindgen as swb;
@@ -30,6 +30,21 @@ thread_local! {
     static SEARCH: RefCell<SearchStore> = RefCell::new(SearchStore::new());
 }
 
+fn filter_out_near_candidates(
+    candidates: Vec<crate::models::CandidateInput>,
+    near_titles: &[String],
+) -> Vec<crate::models::CandidateInput> {
+    if near_titles.is_empty() {
+        return candidates;
+    }
+
+    let excluded: HashSet<&str> = near_titles.iter().map(String::as_str).collect();
+    candidates
+        .into_iter()
+        .filter(|candidate| !excluded.contains(candidate.path.as_str()))
+        .collect()
+}
+
 #[wasm_bindgen]
 pub fn graph_init(nodes: JsValue, edges: JsValue) -> Result<JsValue, JsValue> {
     let nodes: Vec<NodeInput> = swb::from_value(nodes)?;
@@ -57,8 +72,9 @@ pub fn graph_query_from_atoms(atoms: JsValue, weights: JsValue) -> Result<JsValu
             .borrow()
             .search_structured(&parsed.terms, &parsed.tags, &parsed.paths)
     });
-    let candidate_count = candidates.len();
     let near_titles = parsed.near_titles.clone();
+    let candidates = filter_out_near_candidates(candidates, &near_titles);
+    let candidate_count = candidates.len();
     let ranked: Vec<ScoredCandidate> = GRAPH.with(|store| {
         store
             .borrow()
@@ -78,4 +94,48 @@ pub fn cleanup_all() -> Result<JsValue, JsValue> {
     GRAPH.with(|store| store.borrow_mut().clear());
     SEARCH.with(|store| store.borrow_mut().clear());
     Ok(JsValue::NULL)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filter_out_near_candidates;
+    use crate::models::CandidateInput;
+
+    #[test]
+    fn filter_out_near_candidates_excludes_matching_paths() {
+        let candidates = vec![
+            CandidateInput {
+                title: "alpha".to_string(),
+                path: "alpha.md".to_string(),
+                title_score: 1.0,
+                body_score: 0.0,
+            },
+            CandidateInput {
+                title: "beta".to_string(),
+                path: "beta.md".to_string(),
+                title_score: 0.5,
+                body_score: 0.5,
+            },
+        ];
+
+        let filtered = filter_out_near_candidates(candidates, &["alpha.md".to_string()]);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].path, "beta.md");
+    }
+
+    #[test]
+    fn filter_out_near_candidates_keeps_candidates_without_matches() {
+        let candidates = vec![CandidateInput {
+            title: "alpha".to_string(),
+            path: "alpha.md".to_string(),
+            title_score: 1.0,
+            body_score: 0.0,
+        }];
+
+        let filtered = filter_out_near_candidates(candidates, &["beta.md".to_string()]);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].path, "alpha.md");
+    }
 }
