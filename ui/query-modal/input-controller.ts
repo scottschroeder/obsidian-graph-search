@@ -144,11 +144,25 @@ export class QueryInputController {
 					this.inputModel.applyBackspace();
 				}
 				handled = true;
+			} else if (inputType === "deleteWordBackward") {
+				if (rangeEnd > rangeStart) {
+					this.inputModel.deleteRange(rangeStart, rangeEnd);
+				} else {
+					this.inputModel.applyDeleteWordBackward();
+				}
+				handled = true;
 			} else if (inputType === "deleteContentForward") {
 				if (rangeEnd > rangeStart) {
 					this.inputModel.deleteRange(rangeStart, rangeEnd);
 				} else {
 					this.inputModel.applyDeleteForward();
+				}
+				handled = true;
+			} else if (inputType === "deleteWordForward") {
+				if (rangeEnd > rangeStart) {
+					this.inputModel.deleteRange(rangeStart, rangeEnd);
+				} else {
+					this.inputModel.applyDeleteWordForward();
 				}
 				handled = true;
 			}

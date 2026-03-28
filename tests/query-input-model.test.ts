@@ -57,6 +57,25 @@ describe("QueryInputModel", () => {
 		expect(formatAtoms(model.atoms)).toBe("");
 	});
 
+	it("deletes the previous word and allows replacement text", () => {
+		const model = new QueryInputModel();
+		model.applyInsertText("foo");
+		model.applyDeleteWordBackward();
+		model.applyInsertText("x");
+		expect(formatAtoms(model.atoms)).toBe("x");
+		expect(model.caretOffset).toBe(1);
+	});
+
+	it("deletes the next word and trailing whitespace", () => {
+		const model = new QueryInputModel(
+			[term("foo"), whitespace(), term("bar")],
+			0,
+		);
+		model.applyDeleteWordForward();
+		expect(formatAtoms(model.atoms)).toBe("bar");
+		expect(model.caretOffset).toBe(0);
+	});
+
 	it("inserts in the middle of a term", () => {
 		const model = new QueryInputModel();
 		model.applyInsertText("fob");

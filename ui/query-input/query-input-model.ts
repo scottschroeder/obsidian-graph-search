@@ -89,6 +89,21 @@ export class QueryInputModel {
 		this.caretOffset = Math.max(0, this.caretOffset - 1);
 	}
 
+	applyDeleteWordBackward() {
+		if (this.caretOffset <= 0) {
+			return;
+		}
+		const value = this.displayString();
+		let start = this.caretOffset;
+		while (start > 0 && /\s/.test(value[start - 1])) {
+			start -= 1;
+		}
+		while (start > 0 && !/\s/.test(value[start - 1])) {
+			start -= 1;
+		}
+		this.deleteRange(start, this.caretOffset);
+	}
+
 	applyDeleteForward() {
 		const updated = [...this.atoms];
 		const info = findAtomAtOffset(updated, this.caretOffset);
@@ -117,6 +132,30 @@ export class QueryInputModel {
 			updated[index] = { ...atom, value: nextValue };
 		}
 		this.atoms = normalizeAtoms(updated);
+	}
+
+	applyDeleteWordForward() {
+		const value = this.displayString();
+		if (this.caretOffset >= value.length) {
+			return;
+		}
+		let end = this.caretOffset;
+		if (/\s/.test(value[end])) {
+			while (end < value.length && /\s/.test(value[end])) {
+				end += 1;
+			}
+			while (end < value.length && !/\s/.test(value[end])) {
+				end += 1;
+			}
+		} else {
+			while (end < value.length && !/\s/.test(value[end])) {
+				end += 1;
+			}
+			while (end < value.length && /\s/.test(value[end])) {
+				end += 1;
+			}
+		}
+		this.deleteRange(this.caretOffset, end);
 	}
 
 	deleteRange(start: number, end: number) {
