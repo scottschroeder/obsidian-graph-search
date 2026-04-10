@@ -23,7 +23,7 @@ export function extractRawFromEditable(root: HTMLElement): string {
 }
 
 export function getCaretOffset(root: HTMLElement): number | null {
-	const selection = window.getSelection();
+	const selection = root.ownerDocument.defaultView?.getSelection();
 	if (!selection || selection.rangeCount === 0) {
 		return null;
 	}
@@ -75,11 +75,12 @@ export function restoreCaretOffset(
 	rawOffset: number,
 	options?: { preferBeforeChip?: boolean },
 ) {
-	const selection = window.getSelection();
+	const win = root.ownerDocument.defaultView;
+	const selection = win?.getSelection();
 	if (!selection) {
 		return;
 	}
-	const range = document.createRange();
+	const range = root.ownerDocument.createRange();
 	const target = findNodeAtRawOffset(
 		root,
 		rawOffset,

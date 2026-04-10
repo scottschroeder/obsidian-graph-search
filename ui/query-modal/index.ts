@@ -29,6 +29,7 @@ export class GraphQueryModal extends Modal {
 	private pendingFilterCaret?: number;
 	private buildIdleHandle?: number;
 	private buildIdleKind?: "idle" | "timeout";
+	private win: Window = window;
 	private inputController?: QueryInputController;
 	private suggestController?: QuerySuggestController;
 	private resultsRenderer?: GraphResultsRenderer;
@@ -40,6 +41,7 @@ export class GraphQueryModal extends Modal {
 	}
 
 	onOpen() {
+		this.win = this.containerEl.ownerDocument.defaultView ?? window;
 		const { contentEl } = this;
 		contentEl.empty();
 		this.modalEl.addClass("prompt");
@@ -114,20 +116,23 @@ export class GraphQueryModal extends Modal {
 	}
 
 	onClose() {
+		// The popout window may already be destroyed by the time onClose
+		// fires, which can null out stored window references.
+		const win = this.win ?? window;
 		if (this.debounceHandle) {
-			window.clearTimeout(this.debounceHandle);
+			win.clearTimeout(this.debounceHandle);
 		}
 		if (this.buildIdleHandle !== undefined) {
-			const windowWithIdle = window as Window & {
+			const winWithIdle = win as Window & {
 				cancelIdleCallback?: (id: number) => void;
 			};
 			if (
 				this.buildIdleKind === "idle" &&
-				typeof windowWithIdle.cancelIdleCallback === "function"
+				typeof winWithIdle.cancelIdleCallback === "function"
 			) {
-				windowWithIdle.cancelIdleCallback(this.buildIdleHandle);
+				winWithIdle.cancelIdleCallback(this.buildIdleHandle);
 			} else {
-				window.clearTimeout(this.buildIdleHandle);
+				win.clearTimeout(this.buildIdleHandle);
 			}
 			this.buildIdleHandle = undefined;
 			this.buildIdleKind = undefined;
@@ -155,7 +160,7 @@ export class GraphQueryModal extends Modal {
 			return;
 		}
 		this.pendingFilterCaret = cursor;
-		this.pendingFilterHandle = window.setTimeout(() => {
+		this.pendingFilterHandle = this.win.setTimeout(() => {
 			this.openFilterSuggest();
 		}, 150);
 	}
@@ -214,9 +219,9 @@ export class GraphQueryModal extends Modal {
 
 	private scheduleQuery() {
 		if (this.debounceHandle) {
-			window.clearTimeout(this.debounceHandle);
+			this.win.clearTimeout(this.debounceHandle);
 		}
-		this.debounceHandle = window.setTimeout(() => {
+		this.debounceHandle = this.win.setTimeout(() => {
 			void this.runQuery();
 		}, GraphQueryModal.DEBOUNCE_MS);
 	}
@@ -241,7 +246,7 @@ export class GraphQueryModal extends Modal {
 			return;
 		}
 		const buildPromise = this.queryEngine.scheduleBuild((start) => {
-			const windowWithIdle = window as Window & {
+			const winWithIdle = this.win as Window & {
 				requestIdleCallback?: (
 					callback: () => void,
 					options?: { timeout: number },
@@ -252,9 +257,9 @@ export class GraphQueryModal extends Modal {
 				this.buildIdleKind = undefined;
 				start();
 			};
-			if (typeof windowWithIdle.requestIdleCallback === "function") {
+			if (typeof winWithIdle.requestIdleCallback === "function") {
 				this.buildIdleKind = "idle";
-				this.buildIdleHandle = windowWithIdle.requestIdleCallback(
+				this.buildIdleHandle = winWithIdle.requestIdleCallback(
 					startBuild,
 					{
 						timeout: 1000,
@@ -262,7 +267,7 @@ export class GraphQueryModal extends Modal {
 				);
 			} else {
 				this.buildIdleKind = "timeout";
-				this.buildIdleHandle = window.setTimeout(startBuild, 0);
+				this.buildIdleHandle = this.win.setTimeout(startBuild, 0);
 			}
 		});
 		buildPromise?.catch(() => {
@@ -291,7 +296,7 @@ export class GraphQueryModal extends Modal {
 
 	private cancelPendingFilter() {
 		if (this.pendingFilterHandle) {
-			window.clearTimeout(this.pendingFilterHandle);
+			(this.win ?? window).clearTimeout(this.pendingFilterHandle);
 			this.pendingFilterHandle = undefined;
 		}
 		this.pendingFilterCaret = undefined;

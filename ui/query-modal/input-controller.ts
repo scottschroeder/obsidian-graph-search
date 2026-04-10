@@ -80,10 +80,13 @@ export class QueryInputController {
 			if (this.isRendering) {
 				return;
 			}
-			if (!(event instanceof InputEvent)) {
+			// Avoid `instanceof InputEvent` — it fails across Obsidian
+			// popout windows because each window has its own constructors.
+			if (!("inputType" in event)) {
 				return;
 			}
-			const selection = window.getSelection();
+			const selection =
+				this.inputEl.ownerDocument.defaultView?.getSelection();
 			const range = selection?.rangeCount
 				? selection.getRangeAt(0)
 				: null;
